@@ -24,9 +24,9 @@ lep_pt = {"bin_width": 5,
            "title": "Lepton Transverse Momentum"}
 
 lep_eta = {"bin_width": 0.2,
-           "numbins":  25,
-           "xmin":     -2.5,
-           "xmax":     2.5,
+           "numbins":  26,
+           "xmin":     -2.6,
+           "xmax":     2.6,
            "xlabel": "$\eta^{lep}$",
            "xvariable": "lep_eta",
            "title": "Lepton Pseudorapidity"}
@@ -56,4 +56,4 @@ lep_type = {"bin_width": 1,
            "title": "Lepton Absolute PDG ID"}
 
 
-hist_dicts = {"met_et": etmiss, "mtw": mtw, "jet_n": jet_n, "lep_pt": lep_pt}
+hist_dicts = {"met_et": etmiss, "mtw": mtw, "jet_n": jet_n, "lep_pt": lep_pt, "lep_eta": lep_eta}

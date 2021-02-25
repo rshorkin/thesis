@@ -14,6 +14,7 @@ import WCuts
 import infofile
 import WSamples
 from WHistograms import hist_dicts
+from WAsymmetry import *
 
 branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "lep_phi", "lep_E", "lep_n",
             "lep_z0", "lep_charge", "lep_type", "lep_isTightID", "lep_ptcone30", "lep_etcone20",
@@ -25,7 +26,7 @@ branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "
             ]
 
 lumi = 10  # 10 fb-1
-fraction = .001
+fraction = .01
 common_path = "/media/roman/Backup Plus/data/1lep/"
 save_choice = int(input("Save dataframes? 0 for no, 1 for yes\n"))
 if save_choice != 1:
@@ -186,7 +187,6 @@ def plot_data(data):
     print("###==========####")
     print("Started plotting")
 
-
     plot_label = "$W \\rightarrow l\\nu$"
     signal_label = "Signal $W$"
 
@@ -224,14 +224,14 @@ def plot_data(data):
             mc_heights, _ = np.histogram(data[sample][x_var].values, bins=bins, weights=data[sample].totalWeight.values)
             mc_tot_heights = np.add(mc_tot_heights, mc_heights)
 
-        plt.style.use(hep.style.ATLAS)
         plt.clf()
-        _fig = plt.figure(figsize=(9.5, 9))
+        plt.style.use(hep.style.ATLAS)
+        _ = plt.figure(figsize=(9.5, 9))
         plt.axes([0.1, 0.30, 0.85, 0.65])
-        plt.yscale("log")
+        plt.yscale("linear")
         main_axes = plt.gca()
         main_axes.set_title(h_title)
-        hep.histplot(main_axes.hist(data["data"][x_var], bins=bins, log=True, facecolor="none"),
+        hep.histplot(main_axes.hist(data["data"][x_var], bins=bins, log=False, facecolor="none"),
                      color="black", yerr=True, histtype="errorbar")
         ns, n_bins, patches = main_axes.hist(mc_x, bins=bins, weights=mc_weights, stacked=True, color=mc_colors,
                                              label=mc_labels)
@@ -257,8 +257,9 @@ def plot_data(data):
         ratio_axes.set_xlabel(h_xlabel)
         plt.grid("True", axis="y", color="black", linestyle="--")
         # plt.show()
-        plt.savefig(f"../Results/{key}.pdf")
+        plt.savefig(f"../Results/{key}_linear.pdf")
 
 
 data = get_data_from_files()
 plot_data(data)
+build_asym(data)
