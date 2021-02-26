@@ -55,8 +55,7 @@ def build_asym(data):
     plt.errorbar(bin_centers[int(len(data_x)/2):], asym_x, fmt="ko")
     main_axes.set_xlim(0., 2.6)
     main_axes.xaxis.set_minor_locator(AutoMinorLocator())
-    main_axes.set_xticklabels([])
-    plt.savefig("asym.jpg")
+    plt.savefig("asym_13TeV.jpg")
 
 
 

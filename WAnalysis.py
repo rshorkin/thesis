@@ -6,15 +6,17 @@ import math
 import uproot
 import csv
 import time
-import uproot3
 from matplotlib.ticker import AutoMinorLocator
 import mplhep as hep
+import tensorflow as tf
+import zfit
 
 import WCuts
 import infofile
 import WSamples
 from WHistograms import hist_dicts
-from WAsymmetry import *
+from WAsymmetry import build_asym
+import WMETFit
 
 branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "lep_phi", "lep_E", "lep_n",
             "lep_z0", "lep_charge", "lep_type", "lep_isTightID", "lep_ptcone30", "lep_etcone20",
@@ -26,8 +28,8 @@ branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "
             ]
 
 lumi = 10  # 10 fb-1
-fraction = .01
-common_path = "/media/roman/Backup Plus/data/1lep/"
+fraction = .001
+common_path = "/media/roman/Backup Plus/data_13TeV/1lep/"
 save_choice = int(input("Save dataframes? 0 for no, 1 for yes\n"))
 if save_choice != 1:
     save_file = None
@@ -261,5 +263,12 @@ def plot_data(data):
 
 
 data = get_data_from_files()
-plot_data(data)
+# plot_data(data)
 build_asym(data)
+
+obs = zfit.Space('mtw', limits=(60, 180))
+
+data_for_fit = data["data"]["mtw"]
+model = WMETFit.create_initial_model(obs, data_for_fit)
+fit_params = WMETFit.initial_fitter(data_for_fit, model, obs)
+WMETFit.plot_fit_result({"crystal ball": model}, data_for_fit, fit_params, obs)
