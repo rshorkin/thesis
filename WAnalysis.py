@@ -28,7 +28,7 @@ branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "
             ]
 
 lumi = 10  # 10 fb-1
-fraction = .001
+fraction = .01
 common_path = "/media/roman/Backup Plus/data_13TeV/1lep/"
 save_choice = int(input("Save dataframes? 0 for no, 1 for yes\n"))
 if save_choice != 1:
@@ -234,7 +234,7 @@ def plot_data(data):
         main_axes = plt.gca()
         main_axes.set_title(h_title)
         hep.histplot(main_axes.hist(data["data"][x_var], bins=bins, log=False, facecolor="none"),
-                     color="black", yerr=True, histtype="errorbar")
+                     color="black", yerr=True, histtype="errorbar", label='data')
         ns, n_bins, patches = main_axes.hist(mc_x, bins=bins, weights=mc_weights, stacked=True, color=mc_colors,
                                              label=mc_labels)
         handles, labels = main_axes.get_legend_handles_labels()
@@ -254,7 +254,7 @@ def plot_data(data):
         ratio_axes.set_xlim(h_xmin * 0.9, h_xmax * 1.1)
         ratio_axes.xaxis.set_minor_locator(AutoMinorLocator())
 
-        main_axes.set_ylabel("Events/bin")
+        main_axes.set_ylabel(f"Events/{h_bin_width}")
         ratio_axes.set_ylabel("Ratio\nData/MC")
         ratio_axes.set_xlabel(h_xlabel)
         plt.grid("True", axis="y", color="black", linestyle="--")

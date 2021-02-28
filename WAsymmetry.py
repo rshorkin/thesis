@@ -1,25 +1,16 @@
-import ROOT
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas
 import math
-import uproot
-import csv
-import time
-import uproot3
 from matplotlib.ticker import AutoMinorLocator
 import mplhep as hep
 
-import WCuts
-import infofile
-import WSamples
 from WHistograms import hist_dicts
 
 
 def build_asym(data):
 
     signal = None
-    stack_order = ["diboson", "Z+jets", "ttbar", "single top", "W+jets"]
     hist = hist_dicts["lep_eta"]
 
     h_bin_width = hist["bin_width"]
@@ -52,7 +43,9 @@ def build_asym(data):
     plt.axes([0.1, 0.30, 0.85, 0.65])
     main_axes = plt.gca()
     main_axes.set_title("Lepton Charge Asymmetry")
-    plt.errorbar(bin_centers[int(len(data_x)/2):], asym_x, fmt="ko")
+    main_axes.set_xlabel(h_xlabel)
+    main_axes.set_ylabel(f'Events/{h_bin_width}')
+    plt.errorbar(bin_centers[int(len(data_x)/2):], asym_x, xerr=h_bin_width/2, fmt="ko")
     main_axes.set_xlim(0., 2.6)
     main_axes.xaxis.set_minor_locator(AutoMinorLocator())
     plt.savefig("asym_13TeV.jpg")
