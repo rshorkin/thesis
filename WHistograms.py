@@ -24,9 +24,9 @@ lep_pt = {"bin_width": 5,
            "title": "Lepton Transverse Momentum"}
 
 lep_eta = {"bin_width": 0.2,
-           "numbins":  26,
-           "xmin":     -2.6,
-           "xmax":     2.6,
+           "numbins":  24,
+           "xmin":     -2.4,
+           "xmax":     2.4,
            "xlabel": "$\eta^{lep}$",
            "xvariable": "lep_eta",
            "title": "Lepton Pseudorapidity"}

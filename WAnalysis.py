@@ -28,9 +28,10 @@ branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "
             ]
 
 lumi = 10  # 10 fb-1
-fraction = .01
+fraction = .001
 common_path = "/media/roman/Backup Plus/data_13TeV/1lep/"
-save_choice = int(input("Save dataframes? 0 for no, 1 for yes\n"))
+# save_choice = int(input("Save dataframes? 0 for no, 1 for yes\n")) todo
+save_choice = 0
 if save_choice != 1:
     save_file = None
 elif save_choice == 1:
@@ -42,7 +43,7 @@ def calc_theta(lep_eta):
 
 
 def top_weight(x):
-    return (x/abs(x))
+    return (x / abs(x))
 
 
 def calc_mtw(lep_pt, met_et, lep_phi, met_phi):
@@ -141,6 +142,7 @@ def read_file(path, sample, branches=branches):
 
     num_after_cuts = len(df.index)
     print("Number of events after cuts: {0}".format(num_after_cuts))
+    print(df.info(verbose=False, memory_usage='deep'))
     return df
 
 
@@ -171,7 +173,8 @@ def read_sample(sample, save_file):
 
 def get_data_from_files():
     data = {}
-    switch = int(input("What do you want to analyze? 0 for all, 1 for data, 2 for MC\n"))
+    # switch = int(input("What do you want to analyze? 0 for all, 1 for data, 2 for MC\n")) todo
+    switch = 0
     if switch == 0:
         samples = ["data", "diboson", "ttbar", "Z+jets", "single top", "W+jets"]
     elif switch == 1:
@@ -230,10 +233,10 @@ def plot_data(data):
         plt.style.use(hep.style.ATLAS)
         _ = plt.figure(figsize=(9.5, 9))
         plt.axes([0.1, 0.30, 0.85, 0.65])
-        plt.yscale("linear")
+        plt.yscale("log")
         main_axes = plt.gca()
         main_axes.set_title(h_title)
-        hep.histplot(main_axes.hist(data["data"][x_var], bins=bins, log=False, facecolor="none"),
+        hep.histplot(main_axes.hist(data["data"][x_var], bins=bins, log=True, facecolor="none"),
                      color="black", yerr=True, histtype="errorbar", label='data')
         ns, n_bins, patches = main_axes.hist(mc_x, bins=bins, weights=mc_weights, stacked=True, color=mc_colors,
                                              label=mc_labels)
@@ -263,12 +266,14 @@ def plot_data(data):
 
 
 data = get_data_from_files()
-# plot_data(data)
+plot_data(data)
 build_asym(data)
 
 obs = zfit.Space('mtw', limits=(60, 180))
 
-data_for_fit = data["data"]["mtw"]
-model = WMETFit.create_initial_model(obs, data_for_fit)
-fit_params = WMETFit.initial_fitter(data_for_fit, model, obs)
-WMETFit.plot_fit_result({"crystal ball": model}, data_for_fit, fit_params, obs)
+data_fit, components, params = WMETFit.initial_fitter(data, obs)
+models = {'total': data_fit,
+          'diboson': components[0], 'ttbar': components[1], 'Z+jets': components[2], 'single top': components[3],
+          'signal': components[4]}
+
+WMETFit.plot_fit_result(models, data['data']['mtw'], params, obs)
