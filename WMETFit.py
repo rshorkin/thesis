@@ -44,10 +44,10 @@ def initial_fitter(data, obs):
             print(f'Fitting {sample} background')
             mu = zfit.Parameter(f"mu_{sample}", 80., 60., 120.)
             sigma = zfit.Parameter(f'sigma_{sample}', 8., 1., 100.)
-            alpha = zfit.Parameter(f'alpha_{sample}', -.5, -10., 0.)
-            n = zfit.Parameter(f'n_{sample}', 120., 0.01, 500.)
+           # alpha = zfit.Parameter(f'alpha_{sample}', -.5, -10., 0.)
+           # n = zfit.Parameter(f'n_{sample}', 120., 0.01, 500.)
             n_bgr = zfit.Parameter(f'yield_{sample}', int(0.01*num_events), 0., int(0.5*num_events), step_size=1)
-            bgr_frag_model = zfit.pdf.CrystalBall(obs=obs, mu=mu, sigma=sigma, alpha=alpha, n=n)
+            bgr_frag_model = zfit.pdf.Gauss(obs=obs, mu=mu, sigma=sigma)
             bgr_frag_model = bgr_frag_model.create_extended(n_bgr)
             bgr_models.append(bgr_frag_model)
             bgr_yields.append(n_bgr)
@@ -109,10 +109,10 @@ def initial_fitter(data, obs):
                            1., 100.)
     alpha = zfit.Parameter('data_alpha',
                            sig_parameters['alpha_W+jets'],
-                           floating=False)
+                           -10., 0.)
     n = zfit.Parameter('data_n',
                        sig_parameters['n_W+jets'],
-                       floating=False)
+                       0., 10000.)
     n_sig = zfit.Parameter('sig_yield', int(0.9 * num_events), 0., int(1.1*num_events), step_size=1)
     n_bgr = zfit.ComposedParameter('bgr_yield',
                                     sum_func,
@@ -130,7 +130,7 @@ def initial_fitter(data, obs):
     nll = zfit.loss.ExtendedUnbinnedNLL(model=data_fit, data=data_to_fit)
     # Create minimizer
     minimizer = zfit.minimize.Minuit(verbosity=0, use_minuit_grad=True)
-    result = minimizer.minimize(nll, params=[n_sig, mu, sigma, n_bgr])
+    result = minimizer.minimize(nll, params=[n_sig, mu, sigma, n, alpha])
     if result.valid:
         print("Result is valid")
         print("Converged:", result.converged)
@@ -182,7 +182,7 @@ def plot_fit_result(models, data, p_params, obs):
     main_axes.set_xlabel(h_xlabel)
     main_axes.set_title("W Transverse Mass Fit")
     main_axes.set_ylabel("Events/4 GeV")
-    main_axes.ticklabel_format(axis='y', style='sci', scilimits=[-2, 2])
+    # main_axes.ticklabel_format(axis='y', style='sci', scilimits=[-2, 2]) todo
 
     x_plot = np.linspace(lower[-1][0], upper[0][0], num=1000)
     for model_name, model in models.items():

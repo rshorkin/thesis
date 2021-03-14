@@ -28,8 +28,8 @@ branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "
             ]
 
 lumi = 10  # 10 fb-1
-fraction = .001
-common_path = "/media/roman/Backup Plus/data_13TeV/1lep/"
+fraction = .01
+common_path = "/media/sf_Shared/1lep/"
 # save_choice = int(input("Save dataframes? 0 for no, 1 for yes\n")) todo
 save_choice = 0
 if save_choice != 1:
@@ -233,10 +233,10 @@ def plot_data(data):
         plt.style.use(hep.style.ATLAS)
         _ = plt.figure(figsize=(9.5, 9))
         plt.axes([0.1, 0.30, 0.85, 0.65])
-        plt.yscale("log")
+        plt.yscale("linear")
         main_axes = plt.gca()
         main_axes.set_title(h_title)
-        hep.histplot(main_axes.hist(data["data"][x_var], bins=bins, log=True, facecolor="none"),
+        hep.histplot(main_axes.hist(data["data"][x_var], bins=bins, log=False, facecolor="none"),
                      color="black", yerr=True, histtype="errorbar", label='data')
         ns, n_bins, patches = main_axes.hist(mc_x, bins=bins, weights=mc_weights, stacked=True, color=mc_colors,
                                              label=mc_labels)
