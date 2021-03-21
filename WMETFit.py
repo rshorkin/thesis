@@ -5,7 +5,6 @@ import numpy as np
 from matplotlib.ticker import AutoMinorLocator
 import mplhep as hep
 
-
 from WHistograms import hist_dicts
 
 
@@ -39,15 +38,16 @@ def initial_fitter(data, obs):
     bgr_yields = []
     bgr_models = []
     for sample, df in data.items():
-        if sample not in ('data', 'W+jets'):
+        if sample not in ('data', 'W+jets', 'ttbar'):
             print('==========')
             print(f'Fitting {sample} background')
+            bgr_yield = len(df.index)
             mu = zfit.Parameter(f"mu_{sample}", 80., 60., 120.)
             sigma = zfit.Parameter(f'sigma_{sample}', 8., 1., 100.)
-           # alpha = zfit.Parameter(f'alpha_{sample}', -.5, -10., 0.)
-           # n = zfit.Parameter(f'n_{sample}', 120., 0.01, 500.)
-            n_bgr = zfit.Parameter(f'yield_{sample}', int(0.01*num_events), 0., int(0.5*num_events), step_size=1)
-            bgr_frag_model = zfit.pdf.Gauss(obs=obs, mu=mu, sigma=sigma)
+            alpha = zfit.Parameter(f'alpha_{sample}', -.5, -10., 0.)
+            n = zfit.Parameter(f'n_{sample}', 120., 0.01, 500.)
+            n_bgr = zfit.Parameter(f'yield_{sample}', bgr_yield, 0., int(1.3 * bgr_yield), step_size=1)
+            bgr_frag_model = zfit.pdf.CrystalBall(obs=obs, mu=mu, sigma=sigma, alpha=alpha, n=n)
             bgr_frag_model = bgr_frag_model.create_extended(n_bgr)
             bgr_models.append(bgr_frag_model)
             bgr_yields.append(n_bgr)
@@ -69,23 +69,77 @@ def initial_fitter(data, obs):
             else:
                 raise Warning(f'Background {sample} fit failed')
 
-        if sample == 'W+jets':
+        if sample == 'ttbar':
             print('==========')
-            print(f'Fitting {sample} signal')
+            print(f'Fitting {sample} background')
+            bgr_yield = len(df.index)
 
             mu = zfit.Parameter(f"mu_{sample}", 80., 60., 120.)
             sigma = zfit.Parameter(f'sigma_{sample}', 8., 1., 100.)
             alpha = zfit.Parameter(f'alpha_{sample}', -.5, -10., 0.)
             n = zfit.Parameter(f'n_{sample}', 120., 0.01, 500.)
-            n_sig = zfit.Parameter(f'yield_{sample}', int(0.9 * num_events), 0., int(1.1*num_events), step_size=1)
-            signal_model = zfit.pdf.CrystalBall(obs=obs, mu=mu, sigma=sigma, alpha=alpha, n=n)
+            n_bgr = zfit.Parameter(f'yield_{sample}', int(0.5*bgr_yield), 0., int(1.3 * bgr_yield), step_size=1)
+
+            bgr_frag_model = zfit.pdf.CrystalBall(obs=obs, mu=mu, sigma=sigma, alpha=alpha, n=n)
+            bgr_frag_model = bgr_frag_model.create_extended(n_bgr)
+
+            ad_mu = zfit.Parameter(f'ad_mu_{sample}', 80., 60., 120.)
+            ad_sigma = zfit.Parameter(f'ad_sigma_{sample}', 8., 1., 100.)
+            ad_yield = zfit.Parameter(f'n_ad_{sample}', int(0.5*bgr_yield), 0., int(1.3 * bgr_yield), step_size=1)
+
+            gauss = zfit.pdf.Gauss(mu=ad_mu, sigma=ad_sigma, obs=obs)
+            gauss = gauss.create_extended(ad_yield)
+
+            ttbar_model = zfit.pdf.SumPDF([bgr_frag_model, gauss])
+
+            bgr_models.append(ttbar_model)
+            bgr_yields.append(n_bgr)
+            bgr_data = format_data(df, obs)
+            # Create NLL
+            nll = zfit.loss.ExtendedUnbinnedNLL(model=ttbar_model, data=bgr_data)
+            # Create minimizer
+            minimizer = zfit.minimize.Minuit(verbosity=0, use_minuit_grad=True)
+            result = minimizer.minimize(nll)
+
+            if result.valid:
+                print("Result is valid")
+                print("Converged:", result.converged)
+                # param_errors = result.hesse()
+                params = result.params
+                print(params)
+                if not bgr_frag_model.is_extended:
+                    raise Warning('MODEL NOT EXTENDED')
+            else:
+                print(result)
+                print(result.params)
+                raise Warning(f'Background {sample} fit failed')
+
+        if sample == 'W+jets':
+            print('==========')
+            print(f'Fitting {sample} signal')
+            sig_yield = len(df.index)
+            mu = zfit.Parameter(f"mu_{sample}", 80., 60., 120.)
+            sigma = zfit.Parameter(f'sigma_{sample}', 8., 1., 100.)
+            alpha = zfit.Parameter(f'alpha_{sample}', -.5, -10., 0.)
+            n = zfit.Parameter(f'n_{sample}', 120., 0.01, 500.)
+            n_sig = zfit.Parameter(f'yield_{sample}', int(0.7*sig_yield), 0., int(1.4 * sig_yield), step_size=1)
+            signal_model = zfit.pdf.CrystalBall(obs=obs, mu=mu, sigma=sigma, n=n, alpha=alpha)
             signal_model = signal_model.create_extended(n_sig)
+
+            ad_mu = zfit.Parameter(f'ad_mu_{sample}', 80., 60., 120.)
+            ad_sigma = zfit.Parameter(f'ad_sigma_{sample}', 8., 1., 100.)
+            ad_yield = zfit.Parameter(f'n_ad_{sample}', int(0.4 * sig_yield), 0., int(1.3 * sig_yield), step_size=1)
+
+            gauss = zfit.pdf.Gauss(mu=ad_mu, sigma=ad_sigma, obs=obs)
+            gauss = gauss.create_extended(ad_yield)
+
+            Wjets_model = zfit.pdf.SumPDF([signal_model, gauss])
 
             signal_data = format_data(df, obs)
             # Create NLL
             nll = zfit.loss.ExtendedUnbinnedNLL(model=signal_model, data=signal_data)
             # Create minimizer
-            minimizer = zfit.minimize.Minuit(verbosity=0, use_minuit_grad=True)
+            minimizer = zfit.minimize.Minuit(verbosity=0, use_minuit_grad=True, tolerance=0.01)
             result = minimizer.minimize(nll)
 
             if result.valid:
@@ -99,60 +153,51 @@ def initial_fitter(data, obs):
                 sig_parameters = {param[0].name: param[1]['value'] for param in result.params.items()}
             else:
                 print('Minimization failed')
-                raise ValueError('Signal fit failed')
+               # raise ValueError('Signal fit failed')
 
-    mu = zfit.Parameter('data_mu',
-                        sig_parameters['mu_W+jets'],
-                        60., 120.)
+    mu = zfit.Parameter('data_mu', sig_parameters['mu_W+jets'], 60., 120.)
     sigma = zfit.Parameter('data_sigma',
                            sig_parameters['sigma_W+jets'],
                            1., 100.)
     alpha = zfit.Parameter('data_alpha',
-                           sig_parameters['alpha_W+jets'],
+                           -.5,
                            -10., 0.)
     n = zfit.Parameter('data_n',
-                       sig_parameters['n_W+jets'],
+                       100.,
                        0., 10000.)
     n_sig = zfit.Parameter('sig_yield', int(0.9 * num_events), 0., int(1.1*num_events), step_size=1)
-    n_bgr = zfit.ComposedParameter('bgr_yield',
-                                    sum_func,
-                                    params=bgr_yields)
+
     data_model = zfit.pdf.CrystalBall(obs=obs, mu=mu, sigma=sigma, alpha=alpha, n=n)
     data_model = data_model.create_extended(n_sig)
-    bgr_models.append(data_model)
+    bgr_models.append(signal_model)
     models = bgr_models
     for model in models:
         if not model.is_extended:
             raise Warning(f'A MODEL {model} IS NOT EXTENDED')
-    data_fit = zfit.pdf.SumPDF(models)
     data_to_fit = format_data(data['data'], obs, 'data')
     # Create NLL
-    nll = zfit.loss.ExtendedUnbinnedNLL(model=data_fit, data=data_to_fit)
+    nll = zfit.loss.ExtendedUnbinnedNLL(model=data_model, data=data_to_fit)
     # Create minimizer
     minimizer = zfit.minimize.Minuit(verbosity=0, use_minuit_grad=True)
-    result = minimizer.minimize(nll, params=[n_sig, mu, sigma, n, alpha])
+    result = minimizer.minimize(nll)
+
     if result.valid:
         print("Result is valid")
         print("Converged:", result.converged)
         param_errors = result.hesse()
         params = result.params
         print(params)
-        if not result.valid:
-            print("Error calculation failed \nResult is not valid")
-            return None
-        else:
-            return data_fit, models, {param[0].name: {"value": param[1]['value'], "error": err[1]['error']}
-                                      for param, err in zip(result.params.items(), param_errors.items())}
-    else:
-        print('Minimization failed \nResult: \n{0}'.format(result))
+        return data_model, models
+    if not result.valid:
+        print("Error calculation failed \nResult is not valid")
         return None
 
 
 # Plotting
 
-def plot_fit_result(models, data, p_params, obs):
-
+def plot_fit_result(models, data, p_params, obs, sample='data'):
     plt_name = "mtw"
+    print(f'Plotting {sample}')
 
     lower, upper = obs.limits
 
@@ -166,18 +211,22 @@ def plot_fit_result(models, data, p_params, obs):
     bins = [h_xmin + x * h_bin_width for x in range(h_num_bins + 1)]
     bin_centers = [h_xmin + h_bin_width / 2 + x * h_bin_width for x in range(h_num_bins)]
 
-    data_x, _ = np.histogram(data.values, bins=bins)
+    data_x, _ = np.histogram(data.mtw.values, bins=bins, weights=data.totalWeight.values)
     data_sum = data_x.sum()
     plot_scale = data_sum * obs.area() / h_num_bins
 
     plt.clf()
     plt.style.use(hep.style.ATLAS)
+    _ = plt.figure(figsize=(9.5, 9))
     plt.axes([0.1, 0.30, 0.85, 0.65])
     main_axes = plt.gca()
-    hep.histplot(main_axes.hist(data, bins=bins, log=False, facecolor="none"),
-                 color="black", yerr=True, histtype="errorbar", label="data")
+    hep.histplot(main_axes.hist(data.mtw, bins=bins, log=False, facecolor="none", weights=data.totalWeight.values),
+                 color="black", yerr=True, histtype="errorbar", label=sample)
+    print('weights')
+    print(data.totalWeight.values)
 
     main_axes.set_xlim(h_xmin, h_xmax)
+    main_axes.set_ylim(0., 1.4*max(data_x))
     main_axes.xaxis.set_minor_locator(AutoMinorLocator())
     main_axes.set_xlabel(h_xlabel)
     main_axes.set_title("W Transverse Mass Fit")
@@ -187,9 +236,11 @@ def plot_fit_result(models, data, p_params, obs):
     x_plot = np.linspace(lower[-1][0], upper[0][0], num=1000)
     for model_name, model in models.items():
         if model.is_extended:
+            print('Model is extended')
             main_axes.plot(x_plot, model.ext_pdf(x_plot) * obs.area() / h_num_bins, label=model_name)
         else:
             main_axes.plot(x_plot, model.pdf(x_plot) * plot_scale, label=model_name)
+            print('Model is not extended')
     main_axes.legend(title=plt_label, loc="best")
-    plt.savefig(f"../Results/fit_plot_{plt_name}_Complex.pdf")
+    plt.savefig(f"../Results/{sample}_plot_{plt_name}_Complex.pdf")
     plt.close()

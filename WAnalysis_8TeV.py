@@ -27,9 +27,9 @@ branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "
             "mcWeight"
             ]
 
-lumi = 10  # 10 fb-1
+lumi = 1  # 10 fb-1
 fraction = .01
-common_path = "/media/sf_Shared/data_13TeV/1lep/"
+common_path = "/media/sf_Shared/data_8TeV/"
 # save_choice = int(input("Save dataframes? 0 for no, 1 for yes\n")) todo
 save_choice = 0
 if save_choice != 1:
