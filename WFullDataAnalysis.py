@@ -6,6 +6,7 @@ import uproot
 import time
 
 import matplotlib.pyplot as plt
+import concurrent.futures
 
 import os
 import psutil
@@ -19,6 +20,9 @@ from WHistograms import hist_dicts
 
 import types
 import uproot3_methods.classes.TH1
+import mplhep as hep
+
+from matplotlib.ticker import AutoMinorLocator
 
 
 class MyTH1(uproot3_methods.classes.TH1.Methods, list):
@@ -59,7 +63,7 @@ def calc_theta(lep_eta):
 
 
 def top_weight(x):
-    return (x / abs(x))
+    return x / abs(x)
 
 
 def calc_mtw(lep_pt, met_et, lep_phi, met_phi):
@@ -93,12 +97,16 @@ def read_file(path, sample, branches=branches):
     print(f'Available Memory: {mem_at_start:.0f} MB')
     count = 0
     hists = {}
+    executor = concurrent.futures.ThreadPoolExecutor(4)
+    start = time.time()
     with uproot.open(path) as file:
         tree = file['mini']
         numevents = tree.num_entries
         print(f'Total number of events in file: {numevents}')
 
-        for batch in tree.iterate(branches, step_size='30 MB', library='np'):
+        for batch in tree.iterate(branches, step_size='30 MB', library='np',
+                                  decompression_executor=executor,
+                                  interpretation_executor=executor):
             print('==============')
             df = pandas.DataFrame.from_dict(batch)
             del batch
@@ -211,6 +219,7 @@ def read_file(path, sample, branches=branches):
     print(f'Current available memory {actual_mem:.0f} MB '
           f'({100 * actual_mem / mem_at_start:.0f}% of what we started with)')
     print('Finished!')
+    print(f'Time elapsed: {time.time() - start} seconds')
     return None
 
 
@@ -235,9 +244,7 @@ def read_sample(sample):
     return None
 
 
-def get_data_from_files():
-    data = {}
-    # switch = int(input("What do you want to analyze? 0 for all, 1 for data, 2 for MC\n")) todo
+def getting_data_main():
     switch = 0
     if switch == 0:
         samples = ["data", "diboson", "ttbar", "Z+jets", "single top", "W+jets"]
@@ -252,21 +259,4 @@ def get_data_from_files():
     return None
 
 
-def read_hist(path):
-    file = uproot3.open(path)
-    histo = file["mtw"]
-    print(type(histo.values))
-    print(type(histo.edges))
-
-    plt.axes([0.1, 0.30, 0.85, 0.65])
-    plt.yscale("linear")
-    main_axes = plt.gca()
-
-    main_axes.bar(histo.edges[:-1] + np.diff(histo.edges)/2, histo.values, np.diff(histo.edges))
-    # main_axes.set_ylim(0, max(histo.values)*1.1)
-    plt.show()
-
-
-get_data_from_files()
-# read_file(path=common_path+'/Data/data_A.1lep.root', sample='data')
-# read_hist('../Output/data_A.root')
+# getting_data_main()
