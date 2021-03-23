@@ -99,6 +99,7 @@ def read_file(path, sample, branches=branches):
     hists = {}
     executor = concurrent.futures.ThreadPoolExecutor(4)
     start = time.time()
+    batch_num = 0
     with uproot.open(path) as file:
         tree = file['mini']
         numevents = tree.num_entries
@@ -197,6 +198,19 @@ def read_file(path, sample, branches=branches):
                 else:
                     for i in range(len(hists[key])):
                         hists[key][i] += histo[i]
+            if not os.path.exists(f'../DataForFit/{sample}/'):
+                os.mkdir(f'../DataForFit/{sample}')
+            f = uproot3.recreate(f'../DataForFit/{sample}/{sample}_{batch_num}.root')
+
+            f['FitTree'] = uproot3.newtree({'mtw': uproot3.newbranch(np.float64, 'mtw'),
+                                            'jet_n': uproot3.newbranch(np.int32, 'jet_n'),
+                                            'totalWeight': uproot3.newbranch(np.float64, 'totalWeight')})
+
+            f['FitTree'].extend({'mtw': df['mtw'].to_numpy(dtype=np.float64),
+                                 'jet_n': df['jet_n'].to_numpy(dtype=np.int32),
+                                 'totalWeight': df['totalWeight'].to_numpy(dtype=np.float64)})
+            f.close()
+            batch_num += 1
             del df
             gc.collect()
             # diagnostics
@@ -205,7 +219,8 @@ def read_file(path, sample, branches=branches):
             print(f'Current available memory {actual_mem:.0f} MB '
                   f'({100*actual_mem/mem_at_start:.0f}% of what we started with)')
 
-    file = uproot3.recreate(f'../Output/{sample}.root', compression=uproot3.ZLIB(4))
+    file = uproot3.recreate(f'../Output/{sample}.root', uproot3.ZLIB(4))
+
     for key, hist in hists.items():
 
         file[key] = hist
@@ -260,3 +275,4 @@ def getting_data_main():
 
 
 # getting_data_main()
+read_file(path=common_path+'Data/data_A.1lep.root', sample='data_A')

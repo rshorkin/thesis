@@ -11,11 +11,6 @@ import mplhep as hep
 import tensorflow as tf
 import zfit
 
-import os
-import psutil
-import gc
-import uproot3
-
 import WCuts
 import infofile
 import WSamples
@@ -77,116 +72,76 @@ def calc_weight(mcWeight, scaleFactor_ELE, scaleFactor_MUON, scaleFactor_PILEUP,
 def read_file(path, sample, branches=branches):
     print("=====")
     print("Processing {0} file".format(sample))
-    mem = psutil.virtual_memory()
-    mem_at_start = mem.available / (1024 ** 2)
-    print(f'Available Memory: {mem_at_start:.0f} MB')
-    dfs = []
-    count = 0
     with uproot.open(path) as file:
-        tree = file['mini']
+        tree = file["mini"]
         numevents = tree.num_entries
+        print(numevents)
+        df = tree.arrays(branches, library='pd', entry_stop=numevents * fraction)
+    df = df[0]
 
-        for batch in tree.iterate(branches, step_size='5 MB', library='np'):
-            df = pandas.DataFrame.from_dict(batch)
-            del batch
-            num_before_cuts = len(df.index)
-            count += num_before_cuts
-            if "data" not in sample and "single" not in sample:
-                df["totalWeight"] = np.vectorize(calc_weight)(df.mcWeight, df.scaleFactor_ELE, df.scaleFactor_MUON,
-                                                              df.scaleFactor_PILEUP, df.scaleFactor_LepTRIGGER)
-                df["totalWeight"] = np.vectorize(get_xsec_weight)(df.totalWeight, sample)
-            elif "data" in sample:
-                df["totalWeight"] = [1 for item in range(len(df.index))]
-            elif "single" in sample:
-                df["totalWeight"] = df["mcWeight"].apply(top_weight)
+    if "data" not in sample and "single" not in sample:
+        df["totalWeight"] = np.vectorize(calc_weight)(df.mcWeight, df.scaleFactor_ELE, df.scaleFactor_MUON,
+                                                      df.scaleFactor_PILEUP, df.scaleFactor_LepTRIGGER)
+        df["totalWeight"] = np.vectorize(get_xsec_weight)(df.totalWeight, sample)
+    elif "data" in sample:
+        df["totalWeight"] = [1 for item in range(len(df.index))]
+    elif "single" in sample:
+        df["totalWeight"] = df["mcWeight"].apply(top_weight)
 
-            df.drop(["mcWeight", "scaleFactor_ELE", "scaleFactor_MUON", "scaleFactor_PILEUP", "scaleFactor_LepTRIGGER"], axis=1,
-                    inplace=True)
-            num_before_cuts = len(df.index)
-            print("Events before cuts: {0}".format(num_before_cuts))
-            df = df.query("met_et > 30000")
-            df = df.query("trigE or trigM")
+    df.drop(["mcWeight", "scaleFactor_ELE", "scaleFactor_MUON", "scaleFactor_PILEUP", "scaleFactor_LepTRIGGER"], axis=1,
+            inplace=True)
+    num_before_cuts = len(df.index)
+    print("Events before cuts: {0}".format(num_before_cuts))
+    df = df.query("met_et > 30000")
+    df = df.query("trigE or trigM")
 
-            fail = df[np.vectorize(WCuts.cut_tight)(df.lep_isTightID)].index
-            df.drop(fail, inplace=True)
+    fail = df[np.vectorize(WCuts.cut_tight)(df.lep_isTightID)].index
+    df.drop(fail, inplace=True)
 
-            fail = df[np.vectorize(WCuts.cut_multijet)(df.lep_pt, df.lep_ptcone30, df.lep_etcone20)].index
-            df.drop(fail, inplace=True)
+    fail = df[np.vectorize(WCuts.cut_multijet)(df.lep_pt, df.lep_ptcone30, df.lep_etcone20)].index
+    df.drop(fail, inplace=True)
 
-            e_df = df.copy()
+    e_df = df.copy()
 
-            fail = e_df[np.vectorize(WCuts.cut_e_fiducial)(e_df.lep_type, e_df.lep_eta)].index
-            e_df.drop(fail, inplace=True)
+    fail = e_df[np.vectorize(WCuts.cut_e_fiducial)(e_df.lep_type, e_df.lep_eta)].index
+    e_df.drop(fail, inplace=True)
 
-            if len(e_df.lep_type) != 0:  # to account for boson -> munu/mumu
+    if len(e_df.lep_type) != 0:  # to account for boson -> munu/mumu
 
-                fail = e_df[np.vectorize(WCuts.cut_e_long)(e_df.lep_type, e_df.lep_trackd0pvunbiased,
-                                                           e_df.lep_tracksigd0pvunbiased)].index
-                e_df.drop(fail, inplace=True)
+        fail = e_df[np.vectorize(WCuts.cut_e_long)(e_df.lep_type, e_df.lep_trackd0pvunbiased,
+                                                   e_df.lep_tracksigd0pvunbiased)].index
+        e_df.drop(fail, inplace=True)
 
-                fail = e_df[np.vectorize(WCuts.cut_e_long_impact)(e_df.lep_type, e_df.lep_z0, e_df.lep_eta)].index
-                e_df.drop(fail, inplace=True)
+        fail = e_df[np.vectorize(WCuts.cut_e_long_impact)(e_df.lep_type, e_df.lep_z0, e_df.lep_eta)].index
+        e_df.drop(fail, inplace=True)
 
-            mu_df = df.copy()
+    mu_df = df.copy()
 
-            fail = mu_df[np.vectorize(WCuts.cut_mu_fiducial)(mu_df.lep_type, mu_df.lep_eta)].index
-            mu_df.drop(fail, inplace=True)
+    fail = mu_df[np.vectorize(WCuts.cut_mu_fiducial)(mu_df.lep_type, mu_df.lep_eta)].index
+    mu_df.drop(fail, inplace=True)
 
-            if len(mu_df.lep_type) != 0:  # to account for boson -> enu/ee
+    if len(mu_df.lep_type) != 0:  # to account for boson -> enu/ee
 
-                fail = mu_df[np.vectorize(WCuts.cut_mu_long)(mu_df.lep_type, mu_df.lep_trackd0pvunbiased,
-                                                             mu_df.lep_tracksigd0pvunbiased)].index
-                mu_df.drop(fail, inplace=True)
+        fail = mu_df[np.vectorize(WCuts.cut_mu_long)(mu_df.lep_type, mu_df.lep_trackd0pvunbiased,
+                                                     mu_df.lep_tracksigd0pvunbiased)].index
+        mu_df.drop(fail, inplace=True)
 
-                fail = mu_df[np.vectorize(WCuts.cut_mu_long_impact)(mu_df.lep_type, mu_df.lep_z0, mu_df.lep_eta)].index
-                mu_df.drop(fail, inplace=True)
+        fail = mu_df[np.vectorize(WCuts.cut_mu_long_impact)(mu_df.lep_type, mu_df.lep_z0, mu_df.lep_eta)].index
+        mu_df.drop(fail, inplace=True)
 
-            df = pandas.concat([e_df, mu_df])
-            del mu_df
-            del e_df
-            gc.collect()
+    df = pandas.concat([e_df, mu_df])
 
-            df["mtw"] = np.vectorize(calc_mtw)(df.lep_pt, df.met_et, df.lep_phi, df.met_phi)
-            df = df.query("mtw > 60000.")
+    df["mtw"] = np.vectorize(calc_mtw)(df.lep_pt, df.met_et, df.lep_phi, df.met_phi)
+    df = df.query("mtw > 60000.")
 
-            # df = df.sort_values(by="entry")
-            df["met_et"] = df["met_et"].apply(to_GeV)
-            df["mtw"] = df["mtw"].apply(to_GeV)
+    df = df.sort_values(by="entry")
+    df["met_et"] = df["met_et"].apply(to_GeV)
+    df["mtw"] = df["mtw"].apply(to_GeV)
 
-            df["lep_pt"] = df["lep_pt"].apply(to_GeV)
+    df["lep_pt"] = df["lep_pt"].apply(to_GeV)
 
-            num_after_cuts = len(df.index)
-            print("Number of events after cuts: {0}".format(num_after_cuts))
-            print(f'Currently at {(count * 100 / numevents):.0f}% of events')
-
-            dfs.append(df)
-            # diagnostics
-            mem = psutil.virtual_memory()
-            actual_mem = mem.available/(1024 ** 2)
-            print(f'Current available memory {actual_mem:.0f} MB '
-                  f'({100*actual_mem/mem_at_start:.0f}% of what we started with)')
-
-    df = pandas.concat(dfs)
-    file = uproot3.recreate('../Output/data_A.root', compression=uproot3.ZLIB(4))
-    for key, hist in hist_dicts.items():
-        h_bin_width = hist["bin_width"]
-        h_num_bins = hist["numbins"]
-        h_xmin = hist["xmin"]
-        h_xmax = hist["xmax"]
-        h_xlabel = hist["xlabel"]
-        x_var = hist["xvariable"]
-        h_title = hist["title"]
-
-        bins = [h_xmin + x * h_bin_width for x in range(h_num_bins + 1)]
-        bin_centers = [h_xmin + h_bin_width / 2 + x * h_bin_width for x in range(h_num_bins)]
-
-        file[key] = np.histogram(df[x_var].values, bins=bins)
-        file[key].show()
-
-    del dfs
-    gc.collect()
-    print(df.info(verbose=False, memory_usage='deep'))
-    raise ValueError('Test concluded')
+    num_after_cuts = len(df.index)
+    print("Number of events after cuts: {0}".format(num_after_cuts))
     return df
 
 
