@@ -111,5 +111,6 @@ def plotting_main():
     print('Plotting finished')
 
 
-# plotting_main()
+if __name__ == '__main__':
+    plotting_main()
 

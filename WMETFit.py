@@ -31,8 +31,6 @@ def sum_func(*args):
     return sum(i for i in args)
 
 
-# Minimizing the J/Psi model
-
 def initial_fitter(data, obs):
     num_events = len(data['data'].index)
     bgr_yields = []
@@ -142,17 +140,7 @@ def initial_fitter(data, obs):
             minimizer = zfit.minimize.Minuit(verbosity=0, use_minuit_grad=True, tolerance=0.01)
             result = minimizer.minimize(nll)
 
-            if result.valid:
-                print("Result is valid")
-                print("Converged:", result.converged)
-                # param_errors = result.hesse()
-                params = result.params
-                print(params)
-                if not signal_model.is_extended:
-                    raise Warning('MODEL NOT EXTENDED')
-                sig_parameters = {param[0].name: param[1]['value'] for param in result.params.items()}
-            else:
-                print('Minimization failed')
+
                # raise ValueError('Signal fit failed')
 
     mu = zfit.Parameter('data_mu', sig_parameters['mu_W+jets'], 60., 120.)

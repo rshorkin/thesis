@@ -1,71 +1,111 @@
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas
-import math
-from matplotlib.ticker import AutoMinorLocator
+import WPlotting
+from WHistograms import lep_asym
+import matplotlib.pyplot as plt
 import mplhep as hep
+from matplotlib.ticker import AutoMinorLocator
 
-from WHistograms import hist_dicts
+
+def calc_asym(pos_lep_eta, neg_lep_eta):
+    asym_hist = []
+    for pos_bin, neg_bin in zip(pos_lep_eta, neg_lep_eta):
+        asym_bin = (pos_bin - neg_bin) / (pos_bin + neg_bin)
+        asym_hist.append(asym_bin)
+    asym_hist = np.array(asym_hist)
+    return asym_hist
 
 
-def build_asym(data):
+def plot_asym():
+    stack_order = ["diboson", "Z+jets", "ttbar", "single top", "W+jets"]
+    plot_label = "$W \\rightarrow l\\nu$"
+    print("==========")
+    print("Plotting Asymmetry")
 
-    signal = None
-    hist = hist_dicts["lep_eta"]
+    hist = lep_asym
 
     h_bin_width = hist["bin_width"]
     h_num_bins = hist["numbins"]
     h_xmin = hist["xmin"]
     h_xmax = hist["xmax"]
     h_xlabel = hist["xlabel"]
-    x_var = hist["xvariable"]
     h_title = hist["title"]
 
     bins = [h_xmin + x * h_bin_width for x in range(h_num_bins + 1)]
     bin_centers = [h_xmin + h_bin_width / 2 + x * h_bin_width for x in range(h_num_bins)]
 
-    dict_asym = {'data': {}, 'MC': {}}
+    switch = int(input('0 for all leptons, 1 for electrons, 2 for muons\n'))
+    if switch == 0:
+        pos_name = 'pos_eta'
+        neg_name = 'neg_eta'
+        lep_type = 'all'
+        pos_hist = {sample:
+                    np.add(WPlotting.read_histogram('pos_ele_eta')[sample], WPlotting.read_histogram('pos_mu_eta')[sample])
+                    for sample in ["diboson", "Z+jets", "ttbar", "single top", "W+jets", 'data']}
+        neg_hist = {sample:
+                    np.add(WPlotting.read_histogram('neg_ele_eta')[sample], WPlotting.read_histogram('neg_mu_eta')[sample])
+                    for sample in ["diboson", "Z+jets", "ttbar", "single top", "W+jets", 'data']}
+    elif switch == 1:
+        lep_type = 'ele'
+    elif switch == 2:
+        lep_type = 'mu'
+    else:
+        raise ValueError('Choice is not in (0, 1, 2)')
 
-    charge_queries = {"pos": "lep_charge == 1", "neg": "lep_charge == -1"}
-    for key, query in charge_queries.items():
-        data_temp = {data_dict_key: data_dict_item.query(query) for data_dict_key, data_dict_item in data.items()}
-        data_x, _ = np.histogram(data_temp["data"][x_var].values, bins=bins)
+    if switch in (1, 2):
+        pos_name = f'pos_{lep_type}_eta'
+        neg_name = f'neg_{lep_type}_eta'
+        pos_hist = WPlotting.read_histogram(pos_name)
+        neg_hist = WPlotting.read_histogram(neg_name)
 
-        mc_weights = []
-        mc_tot_heights = np.zeros(len(bin_centers))
-
-        for sample, df in data_temp.items():
-            if sample != "data":
-                mc_weights.append(df.totalWeight.values)
-                mc_heights, _ = np.histogram(df[x_var].values, bins=bins,
-                                             weights=df.totalWeight.values)
-                mc_tot_heights = np.add(mc_tot_heights, mc_heights)
-
-        for i in range(int(len(data_x)/2)):
-            data_x[-(i+1)] = data_x[i] + data_x[-(i+1)]
-            mc_tot_heights[-(i+1)] = mc_tot_heights[i] + mc_tot_heights[-(i+1)]
-
-        dict_asym['data'][key] = data_x[int(len(data_x)/2):]
-        dict_asym['MC'][key] = mc_tot_heights[int(len(mc_tot_heights)/2):]
-
-    asym_x = {}
-    for sample, collection in dict_asym.items():
-        asym_x[sample] = [(collection["pos"][i] - collection["neg"][i]) / (collection["pos"][i] + collection["neg"][i])
-                          for i in range(len(collection["pos"]))]
+    data_asym_heights = calc_asym(pos_hist['data'], neg_hist['data'])
 
     plt.clf()
     plt.style.use(hep.style.ATLAS)
     _ = plt.figure(figsize=(9.5, 9))
     plt.axes([0.1, 0.30, 0.85, 0.65])
+    plt.yscale("linear")
     main_axes = plt.gca()
-    main_axes.set_title("Lepton Charge Asymmetry")
-    main_axes.set_xlabel(r'|$\eta_{ll}$|')
-    main_axes.set_ylabel(r'Asymmetry Value')
-    plt.errorbar(bin_centers[len(asym_x['data']):], asym_x['data'], xerr=h_bin_width/2, fmt="ko")
-    plt.errorbar(bin_centers[len(asym_x['MC']):], asym_x['MC'], xerr=h_bin_width / 2, fmt="bo")
-    main_axes.set_xlim(0., 2.6)
+    main_axes.set_title(h_title)
+
+    main_axes.errorbar(x=bin_centers, y=data_asym_heights,
+                       xerr=h_bin_width / 2,
+                       fmt='ko', label='data')
+
+    mc_tot_heights = {pos_name: np.zeros(len(bin_centers)), neg_name: np.zeros(len(bin_centers))}
+    for hist, name in zip((pos_hist, neg_hist), (pos_name, neg_name)):
+        for sample in stack_order:
+            mc_heights = hist[sample]
+            mc_tot_heights[name] = np.add(mc_tot_heights[name], mc_heights)
+    mc_asym_heights = calc_asym(mc_tot_heights[pos_name], mc_tot_heights[neg_name])
+    main_axes.bar(x=bin_centers, height=mc_asym_heights, width=h_bin_width,
+                  color='lightblue', label='MC Simulation')
+
+    handles, labels = main_axes.get_legend_handles_labels()
+    main_axes.legend(reversed(handles), reversed(labels), title=plot_label, loc="upper right")
+    main_axes.set_xlim(h_xmin, h_xmax)
+
     main_axes.xaxis.set_minor_locator(AutoMinorLocator())
-    plt.savefig("asym_13TeV_new.jpg")
+
+    main_axes.set_xticklabels([])
+
+    plt.axes([0.1, 0.1, 0.85, 0.2])
+    plt.yscale("linear")
+    ratio_axes = plt.gca()
+    ratio_axes.errorbar(bin_centers, data_asym_heights / mc_asym_heights, xerr=h_bin_width / 2.,
+                        fmt='.', color="black")
+    ratio_axes.set_ylim(0.65, 1.35)
+    ratio_axes.set_yticks([0.75, 1., 1.25])
+    ratio_axes.set_xlim(h_xmin, h_xmax)
+    ratio_axes.xaxis.set_minor_locator(AutoMinorLocator())
+
+    main_axes.set_ylabel(f"Charge Asymmetry")
+    ratio_axes.set_ylabel("Ratio\nData/MC")
+    ratio_axes.set_xlabel(h_xlabel)
+    plt.grid("True", axis="y", color="black", linestyle="--")
+
+    plt.savefig(f'../Results/asym_{lep_type}.jpeg')
+    return None
 
 
+plot_asym()
 

@@ -5,7 +5,6 @@ import math
 import uproot
 import time
 
-import matplotlib.pyplot as plt
 import concurrent.futures
 
 import os
@@ -20,21 +19,6 @@ from WHistograms import hist_dicts
 
 import types
 import uproot3_methods.classes.TH1
-import mplhep as hep
-
-from matplotlib.ticker import AutoMinorLocator
-
-
-class MyTH1(uproot3_methods.classes.TH1.Methods, list):
-    def __init__(self, low, high, values, title=""):
-        self._fXaxis = types.SimpleNamespace()
-        self._fXaxis._fNbins = len(values)-1
-        self._fXaxis._fXmin = low
-        self._fXaxis._fXmax = high
-        for x in values:
-            self.append(float(x))
-        self._fTitle = title
-        self._classname = "TH1F"
 
 
 branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "lep_phi", "lep_E", "lep_n",
@@ -64,6 +48,10 @@ def calc_theta(lep_eta):
 
 def top_weight(x):
     return x / abs(x)
+
+
+def abs_value(x):
+    return abs(x)
 
 
 def calc_mtw(lep_pt, met_et, lep_phi, met_phi):
@@ -135,6 +123,10 @@ def read_file(path, sample, branches=branches):
             fail = df[np.vectorize(WCuts.cut_multijet)(df.lep_pt, df.lep_ptcone30, df.lep_etcone20)].index
             df.drop(fail, inplace=True)
 
+            df["mtw"] = np.vectorize(calc_mtw)(df.lep_pt, df.met_et, df.lep_phi, df.met_phi)
+            df = df.query("mtw > 60000.")
+            df["mtw"] = df["mtw"] / 1000
+
             e_df = df.copy()
 
             fail = e_df[np.vectorize(WCuts.cut_e_fiducial)(e_df.lep_type, e_df.lep_eta)].index
@@ -148,6 +140,8 @@ def read_file(path, sample, branches=branches):
 
                 fail = e_df[np.vectorize(WCuts.cut_e_long_impact)(e_df.lep_type, e_df.lep_z0, e_df.lep_eta)].index
                 e_df.drop(fail, inplace=True)
+
+                e_df['mtw_enu'] = e_df['mtw']
 
             mu_df = df.copy()
 
@@ -163,32 +157,45 @@ def read_file(path, sample, branches=branches):
                 fail = mu_df[np.vectorize(WCuts.cut_mu_long_impact)(mu_df.lep_type, mu_df.lep_z0, mu_df.lep_eta)].index
                 mu_df.drop(fail, inplace=True)
 
+                mu_df['mtw_munu'] = mu_df['mtw']
+
             df = pandas.concat([e_df, mu_df])
             del mu_df
             del e_df
             gc.collect()
 
-            df["mtw"] = np.vectorize(calc_mtw)(df.lep_pt, df.met_et, df.lep_phi, df.met_phi)
-            df = df.query("mtw > 60000.")
-
             # df = df.sort_values(by="entry")
 
-            df["met_et"] = df["met_et"]/1000
-            df["mtw"] = df["mtw"]/1000
+            df["met_et"] = df["met_et"] / 1000
+            df['lep_E'] = df['lep_E'] / 1000
+            df["lep_pt"] = df["lep_pt"] / 1000
 
-            df["lep_pt"] = df["lep_pt"]/1000
+            # Asymmetry related histograms
+            df['pos_ele_eta'] = df.query('lep_type == 11 and lep_charge == 1')['lep_eta']
+            df['pos_ele_eta'] = np.vectorize(abs_value)(df.pos_ele_eta)
+
+            df['neg_ele_eta'] = df.query('lep_type == 11 and lep_charge == -1')['lep_eta']
+            df['neg_ele_eta'] = np.vectorize(abs_value)(df.neg_ele_eta)
+
+            df['pos_mu_eta'] = df.query('lep_type == 13 and lep_charge == 1')['lep_eta']
+            df['pos_mu_eta'] = np.vectorize(abs_value)(df.pos_mu_eta)
+
+            df['neg_mu_eta'] = df.query('lep_type == 13 and lep_charge == -1')['lep_eta']
+            df['neg_mu_eta'] = np.vectorize(abs_value)(df.neg_mu_eta)
 
             num_after_cuts = len(df.index)
             print("Number of events after cuts: {0}".format(num_after_cuts))
             print(f'Currently at {(count * 100 / numevents):.0f}% of events ({count}/{numevents})')
 
             for key, hist in hist_dicts.items():
+
                 h_bin_width = hist["bin_width"]
                 h_num_bins = hist["numbins"]
                 h_xmin = hist["xmin"]
-
                 x_var = hist["xvariable"]
 
+                if x_var not in df:
+                    df[x_var] = [0 for item in range(len(df.index))]
                 bins = [h_xmin + x * h_bin_width for x in range(h_num_bins + 1)]
                 data_x, binning = np.histogram(df[x_var].values, bins=bins, weights=df.totalWeight.values)
                 data_x = data_x.astype('float64')
@@ -260,13 +267,14 @@ def read_sample(sample):
 
 
 def getting_data_main():
-    switch = 0
+    switch = 2
     if switch == 0:
         samples = ["data", "diboson", "ttbar", "Z+jets", "single top", "W+jets"]
     elif switch == 1:
         samples = ["data"]
     elif switch == 2:
-        samples = ["diboson", "ttbar", "Z+jets", "single top", "W+jets"]
+        samples = [ #"diboson", "ttbar",
+                   "Z+jets", "single top", "W+jets"]
     else:
         raise ValueError("Option {0} cannot be processed".format(switch))
     for s in samples:
@@ -274,5 +282,5 @@ def getting_data_main():
     return None
 
 
-# getting_data_main()
-read_file(path=common_path+'Data/data_A.1lep.root', sample='data_A')
+getting_data_main()
+# read_file(path=common_path+'Data/data_A.1lep.root', sample='data_A')

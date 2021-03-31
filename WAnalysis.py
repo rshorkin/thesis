@@ -101,6 +101,10 @@ def read_file(path, sample, branches=branches):
     fail = df[np.vectorize(WCuts.cut_multijet)(df.lep_pt, df.lep_ptcone30, df.lep_etcone20)].index
     df.drop(fail, inplace=True)
 
+    df["mtw"] = np.vectorize(calc_mtw)(df.lep_pt, df.met_et, df.lep_phi, df.met_phi)
+    df = df.query("mtw > 60000.")
+    df["mtw"] = df["mtw"].apply(to_GeV)
+
     e_df = df.copy()
 
     fail = e_df[np.vectorize(WCuts.cut_e_fiducial)(e_df.lep_type, e_df.lep_eta)].index
@@ -114,6 +118,8 @@ def read_file(path, sample, branches=branches):
 
         fail = e_df[np.vectorize(WCuts.cut_e_long_impact)(e_df.lep_type, e_df.lep_z0, e_df.lep_eta)].index
         e_df.drop(fail, inplace=True)
+
+        e_df['mtw_enu'] = e_df['mtw']
 
     mu_df = df.copy()
 
@@ -129,16 +135,14 @@ def read_file(path, sample, branches=branches):
         fail = mu_df[np.vectorize(WCuts.cut_mu_long_impact)(mu_df.lep_type, mu_df.lep_z0, mu_df.lep_eta)].index
         mu_df.drop(fail, inplace=True)
 
-    df = pandas.concat([e_df, mu_df])
+        mu_df['mtw_munu'] = mu_df['mtw']
 
-    df["mtw"] = np.vectorize(calc_mtw)(df.lep_pt, df.met_et, df.lep_phi, df.met_phi)
-    df = df.query("mtw > 60000.")
+    df = pandas.concat([e_df, mu_df])
 
     df = df.sort_values(by="entry")
     df["met_et"] = df["met_et"].apply(to_GeV)
-    df["mtw"] = df["mtw"].apply(to_GeV)
-
     df["lep_pt"] = df["lep_pt"].apply(to_GeV)
+    df['lep_E'] = df['lep_E'].apply(to_GeV)
 
     num_after_cuts = len(df.index)
     print("Number of events after cuts: {0}".format(num_after_cuts))
@@ -317,15 +321,15 @@ plot_data(data)
     # plot_component(data, sample)
 # build_asym(data)
 
-obs = zfit.Space('mtw', limits=(60, 180))
+# obs = zfit.Space('mtw', limits=(60, 180))
 
-data_fit, components = WMETFit.initial_fitter(data, obs)
-models = {'data': data_fit,
-          'diboson': components[0], 'ttbar': components[1], 'Z+jets': components[2], 'single top': components[3],
-          'W+jets': components[4]}
+# data_fit, components = WMETFit.initial_fitter(data, obs)
+# models = {'data': data_fit,
+#          'diboson': components[0], 'ttbar': components[1], 'Z+jets': components[2], 'single top': components[3],
+#          'W+jets': components[4]}
 
-WMETFit.plot_fit_result(models, data['data'], None, obs)
+# WMETFit.plot_fit_result(models, data['data'], None, obs)
 
-for m_name, model in models.items():
-    if m_name not in ('total', 'signal'):
-        WMETFit.plot_fit_result({f'{m_name} fit': model}, data[m_name], None, obs, sample=m_name)
+# for m_name, model in models.items():
+#    if m_name not in ('total', 'signal'):
+#        WMETFit.plot_fit_result({f'{m_name} fit': model}, data[m_name], None, obs, sample=m_name)
