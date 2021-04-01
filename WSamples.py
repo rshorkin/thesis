@@ -1,6 +1,7 @@
 samples = {
             "data": {
-                    "list": ["data_A", "data_B", "data_C", "data_D"],
+                    "list": ["data_A", "data_B", "data_C",
+                             "data_D"],
                     },
             "diboson": {
                     "list": ["ZqqZll", "WqqZll", "WpqqWmlv", "WplvWmqq", "WlvZqq", "llll", "lllv", "llvv", "lvvv"],
@@ -24,6 +25,7 @@ samples = {
                               "Wenu_PTV0_70_CVetoBVeto", "Wenu_PTV0_70_CFilterBVeto", "Wenu_PTV0_70_BFilter",
                               "Wenu_PTV70_140_CVetoBVeto", "Wenu_PTV70_140_CFilterBVeto", "Wenu_PTV70_140_BFilter",
                               "Wenu_PTV140_280_CVetoBVeto", "Wenu_PTV140_280_CFilterBVeto", "Wenu_PTV140_280_BFilter",
+                              # start from here
                               "Wenu_PTV280_500_CVetoBVeto", "Wenu_PTV280_500_CFilterBVeto", "Wenu_PTV280_500_BFilter",
                               "Wenu_PTV500_1000", "Wenu_PTV1000_E_CMS",
 

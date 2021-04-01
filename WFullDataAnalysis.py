@@ -32,7 +32,7 @@ branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "
 pandas.options.mode.chained_assignment = None
 
 lumi = 10  # 10 fb-1
-fraction = .01
+fraction = 1.
 common_path = "/media/sf_Shared/data_13TeV/1lep/"
 # save_choice = int(input("Save dataframes? 0 for no, 1 for yes\n")) todo
 save_choice = 0
@@ -69,6 +69,16 @@ def to_GeV(x):
     return x / 1000.
 
 
+def subtract(x, y):
+    return x - y
+
+
+def find_lead_jet(pt, y):
+    max_pt = max(pt)
+    index = np.where(pt == max_pt)
+    return y[index]
+
+
 def extract_from_vector(x):
     return x[0]
 
@@ -95,7 +105,8 @@ def read_file(path, sample, branches=branches):
 
         for batch in tree.iterate(branches, step_size='30 MB', library='np',
                                   decompression_executor=executor,
-                                  interpretation_executor=executor):
+                                  interpretation_executor=executor,
+                                  entry_stop=numevents*fraction):
             print('==============')
             df = pandas.DataFrame.from_dict(batch)
             del batch
@@ -183,21 +194,35 @@ def read_file(path, sample, branches=branches):
             df['neg_mu_eta'] = df.query('lep_type == 13 and lep_charge == -1')['lep_eta']
             df['neg_mu_eta'] = np.vectorize(abs_value)(df.neg_mu_eta)
 
+            if len(df.loc[df['jet_n'] > 0].index) > 0:
+                temp_df = pandas.DataFrame()
+                temp_df['eventNumber'] = df.loc[df['jet_n'] > 0]['eventNumber']
+                for column in df.columns:
+                    if 'jet' in column and column != 'jet_n':
+                        temp_df[f'lead_{column}'] = np.vectorize(find_lead_jet)(df.loc[df['jet_n'] > 0]['jet_pt'],
+                                                                                df.loc[df['jet_n'] > 0][column])
+                temp_df['lead_jet_pt'] = temp_df['lead_jet_pt'] / 1000.
+                temp_df['phi_diff'] = np.vectorize(subtract)(df.loc[df['jet_n'] > 0]['lep_phi'],
+                                                             temp_df['lead_jet_phi'])
+                temp_df['abs_phi_diff'] = np.vectorize(abs_value)(temp_df.phi_diff)
+                df = pandas.merge(left=df, right=temp_df, left_on='eventNumber', right_on='eventNumber', how='left')
+
             num_after_cuts = len(df.index)
             print("Number of events after cuts: {0}".format(num_after_cuts))
             print(f'Currently at {(count * 100 / numevents):.0f}% of events ({count}/{numevents})')
 
             for key, hist in hist_dicts.items():
-
                 h_bin_width = hist["bin_width"]
                 h_num_bins = hist["numbins"]
                 h_xmin = hist["xmin"]
                 x_var = hist["xvariable"]
-
-                if x_var not in df:
-                    df[x_var] = [0 for item in range(len(df.index))]
                 bins = [h_xmin + x * h_bin_width for x in range(h_num_bins + 1)]
-                data_x, binning = np.histogram(df[x_var].values, bins=bins, weights=df.totalWeight.values)
+                if x_var in df:
+                    data_x, binning = np.histogram(df.loc[df[x_var].notnull()][x_var].values, bins=bins,
+                                                   weights=df.loc[df[x_var].notnull()]['totalWeight'].values)
+                else:
+                    data_x = np.asarray([0 for bin in range(h_num_bins)])
+                    binning = np.asarray(bins)
                 data_x = data_x.astype('float64')
                 histo = uproot3_methods.classes.TH1.from_numpy((data_x, binning))
                 if key not in hists.keys():
@@ -267,13 +292,13 @@ def read_sample(sample):
 
 
 def getting_data_main():
-    switch = 2
+    switch = 0
     if switch == 0:
         samples = ["data", "diboson", "ttbar", "Z+jets", "single top", "W+jets"]
     elif switch == 1:
         samples = ["data"]
     elif switch == 2:
-        samples = [ #"diboson", "ttbar",
+        samples = ["diboson", "ttbar",
                    "Z+jets", "single top", "W+jets"]
     else:
         raise ValueError("Option {0} cannot be processed".format(switch))

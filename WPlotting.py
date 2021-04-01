@@ -61,7 +61,7 @@ def plot_histogram(hist_name):
     plt.style.use(hep.style.ATLAS)
     _ = plt.figure(figsize=(9.5, 9))
     plt.axes([0.1, 0.30, 0.85, 0.65])
-    plt.yscale("log")
+    plt.yscale("linear")
     main_axes = plt.gca()
     main_axes.set_title(h_title)
 
@@ -80,7 +80,7 @@ def plot_histogram(hist_name):
         mc_tot_heights = np.add(mc_tot_heights, mc_heights)
     handles, labels = main_axes.get_legend_handles_labels()
     main_axes.legend(reversed(handles), reversed(labels), title=plot_label, loc="upper right")
-    main_axes.set_xlim(h_xmin * 0.9, h_xmax * 1.1)
+    main_axes.set_xlim(h_xmin, h_xmax)
 
     main_axes.xaxis.set_minor_locator(AutoMinorLocator())
 
@@ -93,7 +93,7 @@ def plot_histogram(hist_name):
                         fmt='.', color="black")
     ratio_axes.set_ylim(0, 2.5)
     ratio_axes.set_yticks([0, 1, 2])
-    ratio_axes.set_xlim(h_xmin * 0.9, h_xmax * 1.1)
+    ratio_axes.set_xlim(h_xmin, h_xmax)
     ratio_axes.xaxis.set_minor_locator(AutoMinorLocator())
 
     main_axes.set_ylabel(f"Events/{h_bin_width} GeV")

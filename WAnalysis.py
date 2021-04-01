@@ -8,15 +8,11 @@ import csv
 import time
 from matplotlib.ticker import AutoMinorLocator
 import mplhep as hep
-import tensorflow as tf
-import zfit
 
 import WCuts
 import infofile
 import WSamples
 from WHistograms import hist_dicts
-from WAsymmetry import build_asym
-import WMETFit
 
 branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "lep_phi", "lep_E", "lep_n",
             "lep_z0", "lep_charge", "lep_type", "lep_isTightID", "lep_ptcone30", "lep_etcone20",
@@ -28,7 +24,7 @@ branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "
             ]
 
 lumi = 10  # 10 fb-1
-fraction = .01
+fraction = .001
 common_path = "/media/sf_Shared/data_13TeV/1lep/"
 # save_choice = int(input("Save dataframes? 0 for no, 1 for yes\n")) todo
 save_choice = 0
@@ -65,6 +61,16 @@ def extract_from_vector(x):
     return x[0]
 
 
+def find_lead_jet(pt, y):
+    max_pt = max(pt)
+    index = np.where(pt == max_pt)
+    return y[index]
+
+
+def subtract(x, y):
+    return x - y
+
+
 def calc_weight(mcWeight, scaleFactor_ELE, scaleFactor_MUON, scaleFactor_PILEUP, scaleFactor_LepTRIGGER):
     return mcWeight * scaleFactor_ELE * scaleFactor_MUON * scaleFactor_PILEUP * scaleFactor_LepTRIGGER
 
@@ -76,8 +82,9 @@ def read_file(path, sample, branches=branches):
         tree = file["mini"]
         numevents = tree.num_entries
         print(numevents)
-        df = tree.arrays(branches, library='pd', entry_stop=numevents * fraction)
-    df = df[0]
+        batch = tree.arrays(branches, library='np', entry_stop=numevents * fraction)
+    df = pandas.DataFrame.from_dict(batch)
+    del batch
 
     if "data" not in sample and "single" not in sample:
         df["totalWeight"] = np.vectorize(calc_weight)(df.mcWeight, df.scaleFactor_ELE, df.scaleFactor_MUON,
@@ -139,10 +146,21 @@ def read_file(path, sample, branches=branches):
 
     df = pandas.concat([e_df, mu_df])
 
-    df = df.sort_values(by="entry")
+    # df = df.sort_values(by="entry")
     df["met_et"] = df["met_et"].apply(to_GeV)
     df["lep_pt"] = df["lep_pt"].apply(to_GeV)
     df['lep_E'] = df['lep_E'].apply(to_GeV)
+
+    temp_df = pandas.DataFrame()
+    for column in df.columns:
+        if 'jet' in column and column != 'jet_n':
+            print(df.loc[df['jet_n'] > 0]['jet_pt'])
+            print(df.loc[df['jet_n'] > 0][column])
+            temp_df[f'lead_{column}'] = np.vectorize(find_lead_jet)(df.loc[df['jet_n'] > 0]['jet_pt'],
+                                                                    df.loc[df['jet_n'] > 0][column])
+
+    temp_df['phi_diff'] = np.vectorize(subtract)(df.loc[df['jet_n'] > 0]['lep_phi'], temp_df['lead_jet_phi'])
+    df = pandas.concat([df, temp_df], ignore_index=True)
 
     num_after_cuts = len(df.index)
     print("Number of events after cuts: {0}".format(num_after_cuts))
@@ -265,7 +283,7 @@ def plot_data(data):
         ratio_axes.set_xlabel(h_xlabel)
         plt.grid("True", axis="y", color="black", linestyle="--")
         # plt.show()
-        plt.savefig(f"../Results/{key}_linear.pdf")
+        plt.savefig(f"../Results/{key}_fractional.jpg")
 
 
 def plot_component(dfs, component):
@@ -317,19 +335,3 @@ def plot_component(dfs, component):
 
 data = get_data_from_files()
 plot_data(data)
-# for sample in ["diboson", "Z+jets", "ttbar", "single top", "W+jets"]:
-    # plot_component(data, sample)
-# build_asym(data)
-
-# obs = zfit.Space('mtw', limits=(60, 180))
-
-# data_fit, components = WMETFit.initial_fitter(data, obs)
-# models = {'data': data_fit,
-#          'diboson': components[0], 'ttbar': components[1], 'Z+jets': components[2], 'single top': components[3],
-#          'W+jets': components[4]}
-
-# WMETFit.plot_fit_result(models, data['data'], None, obs)
-
-# for m_name, model in models.items():
-#    if m_name not in ('total', 'signal'):
-#        WMETFit.plot_fit_result({f'{m_name} fit': model}, data[m_name], None, obs, sample=m_name)
