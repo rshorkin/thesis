@@ -17,13 +17,19 @@ from WHistograms import hist_dicts
 import mplhep as hep
 from matplotlib.ticker import AutoMinorLocator
 
+from matplotlib import rc
+
+font = {'family': 'Verdana', # для вывода русских букв
+        'weight': 'normal'}
+rc('font', **font)
+
 branches = ['mtw', 'totalWeight', 'jet_n']
 
 pandas.options.mode.chained_assignment = None
 
-lumi = 1  # 10 fb-1
 common_path = "../DataForFit/"
-fraction = .3
+fraction = .01
+lumi_used = str(10*fraction)
 
 
 def read_file(path, sample, branches=branches):
@@ -60,7 +66,7 @@ def read_sample(sample):
     return df_sample
 
 
-def get_data_from_files(switch = 1):
+def get_data_from_files(switch=1):
     data = {}
 
     mem = psutil.virtual_memory()
@@ -102,7 +108,7 @@ def create_initial_model(obs, sample):
     mu = zfit.Parameter(f"mu_{sample}", 80., 60., 120.)
     sigma = zfit.Parameter(f'sigma_{sample}', 8., 1., 100.)
     alpha = zfit.Parameter(f'alpha_{sample}', -.5, -10., 0.)
-    n = zfit.Parameter(f'n_{sample}', 120., 0.01, 500.)
+    n = zfit.Parameter(f'n_{sample}', 120., 0.01, 200.)
     model = zfit.pdf.CrystalBall(obs=obs, mu=mu, sigma=sigma, alpha=alpha, n=n)
 
     return model
@@ -116,81 +122,87 @@ def initial_fitter(data, sample, initial_parameters, obs):
     print('==========')
     print(f'Fitting {sample} sample')
     df = data[sample]
-    bgr_yield = len(df.index)
+    bgr_yield = df['totalWeight'].sum()
     print(f'Total number of events: {bgr_yield}')
 
-    mu = zfit.Parameter(f"mu_{sample}", initial_parameters[sample]['mu'], 40., 100.)
-    sigma = zfit.Parameter(f'sigma_{sample}', initial_parameters[sample]['sigma'], 1., 100.)
-    alphal = zfit.Parameter(f'alphal_{sample}', initial_parameters[sample]['alphal'], 0., 10.)
-    alphar = zfit.Parameter(f'alphar_{sample}', initial_parameters[sample]['alphar'], 0., 10.)
-    nl = zfit.Parameter(f'nl_{sample}', initial_parameters[sample]['nl'], 0.01, 500.)
-    nr = zfit.Parameter(f'nr_{sample}', initial_parameters[sample]['nr'], 0.01, 500.)
+    mu = zfit.Parameter(f"mu_{sample}", initial_parameters['mu'], 40., 180.)
+    sigma = zfit.Parameter(f'sigma_{sample}', initial_parameters['sigma'], 1., 150.)
+
+    alphal = zfit.Parameter(f'alphal_{sample}', initial_parameters['alphal'], 0., 20.)
+    alphar = zfit.Parameter(f'alphar_{sample}', initial_parameters['alphar'], 0., 20.)
+    nl = zfit.Parameter(f'nl_{sample}', initial_parameters['nl'], 0.01, 200.)
+    nr = zfit.Parameter(f'nr_{sample}', initial_parameters['nr'], 0.01, 500.)
     n_bgr = zfit.Parameter(f'yield_DCB_{sample}', bgr_yield, 0., int(1.3 * bgr_yield), step_size=1)
 
     DCB = zfit.pdf.DoubleCB(obs=obs, mu=mu, sigma=sigma, alphal=alphal, nl=nl, alphar=alphar, nr=nr)
     DCB = DCB.create_extended(n_bgr)
 
-    mu_g = zfit.Parameter(f"mu_CB_{sample}", 42., 40., 100.)
-    sigma_g = zfit.Parameter(f'sigma_CB_{sample}', 80., 1., 100.)
+    if '969696969' in sample:
+        alpha = zfit.Parameter(f'alpha_{sample}', -initial_parameters['alphal'], -10., -.5)
+        n = zfit.Parameter(f'n_{sample}', initial_parameters['nl'], 0.01, 500.)
+        DCB = zfit.pdf.CrystalBall(obs=obs, mu=mu, sigma=sigma, alpha=alpha, n=n)
+        n_bgr = zfit.Parameter(f'yield_DCB_{sample}', bgr_yield, 0., int(1.3 * bgr_yield), step_size=1)
+        DCB = DCB.create_extended(n_bgr)
+
+    mu_g = zfit.Parameter(f"mu_CB_{sample}", 42., 10., 200.)
+    sigma_g = zfit.Parameter(f'sigma_CB_{sample}', 80., 1., 200.)
     ad_yield = zfit.Parameter(f'yield_CB_{sample}', int(0.15 * bgr_yield), 0., int(1.3 * bgr_yield), step_size=1)
     alphal = zfit.Parameter(f'alpha_CB_{sample}', 2.6, 0.001, 100.)
-    nl = zfit.Parameter(f'n_CB_{sample}', 13.4, 0.001, 400.)
+    nl = zfit.Parameter(f'n_CB_{sample}', 13.4, 0.001, 200.)
     alphar = zfit.Parameter(f'alphar_CB_{sample}', 0.6, 0.001, 100.)
-    nr = zfit.Parameter(f'nr_CB_{sample}', 2.4, 0.001, 400.)
+    nr = zfit.Parameter(f'nr_CB_{sample}', 2.4, 0.001, 200.)
 
     gauss = zfit.pdf.DoubleCB(mu=mu_g, sigma=sigma_g, alphal=alphal, nl=nl, alphar=alphar, nr=nr, obs=obs)
     gauss = gauss.create_extended(ad_yield)
-    if 'W' not in sample:
-        model = zfit.pdf.SumPDF([DCB, gauss])
-    else:
-        model = DCB
+
+    model = zfit.pdf.SumPDF([DCB, gauss])
 
     bgr_data = format_data(df, obs)
     # Create NLL
     nll = zfit.loss.ExtendedUnbinnedNLL(model=model, data=bgr_data)
     # Create minimizer
-    minimizer = zfit.minimize.Minuit(verbosity=0, use_minuit_grad=True, tolerance=0.01)
+    minimizer = zfit.minimize.Minuit(verbosity=0, use_minuit_grad=True)
     result = minimizer.minimize(nll)
     if result.valid:
         print("Result is valid")
         print("Converged:", result.converged)
         # param_errors = result.hesse()
         print(result.params)
-        mu1 = zfit.run(mu)
-        mu2 = zfit.run(mu_g)
-        weight1 = zfit.run(bgr_yield)
-        weight2 = zfit.run(ad_yield)
-        mean_mu = (mu1 * weight1 + mu2 * weight2) / (weight2 + weight1)
-        avg_mu = (mu1 + mu2) / 2
-        print(mean_mu)
         if not model.is_extended:
             raise Warning('MODEL NOT EXTENDED')
-        return model, [mean_mu, avg_mu, mu1, mu2]
+        return model
     else:
         print('Minimization failed')
         print(result.params)
-        mu1 = zfit.run(mu)
-        mu2 = zfit.run(mu_g)
-        weight1 = zfit.run(bgr_yield)
-        weight2 = zfit.run(ad_yield)
-        mean_mu = (mu1 * weight1 + mu2 * weight2) / (weight2 + weight1)
-        avg_mu = (mu1 + mu2) / 2
-        print(mean_mu)
-        return model, [mean_mu, avg_mu, mu1, mu2]
+        return model
 
 
 # Plotting
 
-def plot_fit_result(models, data, obs, sample='data', x=[80.]):
+def plot_fit_result(models, data, obs, sample='data'):
     plt_name = "mtw"
     print(f'Plotting {sample}')
 
     lower, upper = obs.limits
+    mc_labels_ru = {"diboson": 'Два бозона', "Z+jets": 'Z+струи', "ttbar": '$t \\bar{t}$',
+                    "single top": 'Одиночный t', "W+jets": 'W+струи', 'data': 'Данные'}
+    if '0' in sample:
+        plt_title = f"Аппроксимация поперечной массы W (0 струй)"
+        mc_labels_ru['W+jets'] = 'W'
+        mc_labels_ru['Z+jets'] = 'Z'
+    elif '1' in sample:
+        plt_title = f"Аппроксимация поперечной массы W (1 струя)"
+        mc_labels_ru['W+jets'] = 'Wj'
+        mc_labels_ru['Z+jets'] = 'Zj'
+    elif '2' in sample:
+        plt_title = f"Аппроксимация поперечной массы W (много струй)"
+    else:
+        plt_title = f"Аппроксимация поперечной массы W"
 
     h_bin_width = 5
-    h_num_bins = 18
+    h_num_bins = 24
     h_xmin = 60
-    h_xmax = 150
+    h_xmax = 180
     h_xlabel = hist_dicts[plt_name]["xlabel"]
     plt_label = "$W \\rightarrow l\\nu$"
 
@@ -204,35 +216,48 @@ def plot_fit_result(models, data, obs, sample='data', x=[80.]):
     plt.clf()
     plt.style.use(hep.style.ATLAS)
     _ = plt.figure(figsize=(9.5, 9))
-    plt.axes([0.1, 0.30, 0.85, 0.65])
+    plt.axes([0.1, 0.10, 0.85, 0.85])
     main_axes = plt.gca()
+    if sample != 'data':
+        hist_label = mc_labels_ru[sample[:-3]]
+    else:
+        hist_label = mc_labels_ru[sample]
     hep.histplot(main_axes.hist(data.mtw, bins=bins, log=False, facecolor="none", weights=data.totalWeight.values),
-                 color="black", yerr=True, histtype="errorbar", label=sample)
+                 color="black", yerr=True, histtype="errorbar", label=hist_label)
 
     main_axes.set_xlim(lower[-1][0], upper[0][0])
     main_axes.set_ylim(0., 1.4 * max(data_x))
-    # for point in x:
-       # plt.axvline(point)
+
     main_axes.xaxis.set_minor_locator(AutoMinorLocator())
     main_axes.set_xlabel(h_xlabel)
-    main_axes.set_title("W Transverse Mass Fit")
-    main_axes.set_ylabel("Events/4 GeV")
-    # main_axes.ticklabel_format(axis='y', style='sci', scilimits=[-2, 2]) todo
-
+    main_axes.set_title(plt_title, fontsize=18)
+    main_axes.set_ylabel(f"События/{h_bin_width} ГэВ")
+    plt.text(0.05, 0.97, 'ATLAS Open Data', ha="left", va="top", family='sans-serif', transform=main_axes.transAxes,
+             fontsize=20)
+    plt.text(0.05, 0.9, r'$\sqrt{s}=13\,\mathrm{TeV},\;\int\, L\,dt=$' + lumi_used + '$\,\mathrm{fb}^{-1}$', ha="left",
+             va="top", family='sans-serif', fontsize=16, transform=main_axes.transAxes)
     x_plot = np.linspace(lower[-1][0], upper[0][0], num=1000)
     for model_name, model in models.items():
         if model.is_extended:
-            print('Model is extended')
-            main_axes.plot(x_plot, model.ext_pdf(x_plot) * obs.area() / h_num_bins, label=model_name)
+            if 'combo' not in model_name and 'sum' not in model_name:
+                main_axes.plot(x_plot, model.ext_pdf(x_plot) * obs.area() / h_num_bins,
+                               label=mc_labels_ru[model_name[:-3]] + ' модель')
+            elif 'j' not in model_name:
+                main_axes.plot(x_plot, model.ext_pdf(x_plot) * obs.area() / h_num_bins,
+                               label='Суммарная модель', color='black')
+            elif '0' in model_name:
+                main_axes.plot(x_plot, model.ext_pdf(x_plot) * obs.area() / h_num_bins,
+                               label='Вклад без струй', color='green')
+            elif '1' in model_name:
+                main_axes.plot(x_plot, model.ext_pdf(x_plot) * obs.area() / h_num_bins,
+                               label='Вклад с 1 струёй', color='blue')
+            elif '2' in model_name:
+                main_axes.plot(x_plot, model.ext_pdf(x_plot) * obs.area() / h_num_bins,
+                               label='Вклад с многими струями', color='red')
         else:
             main_axes.plot(x_plot, model.pdf(x_plot) * plot_scale, label=model_name)
-            print('Model is not extended')
-        y_plot = model.ext_pdf(x_plot)
-        y_plot = y_plot.numpy().tolist()
-        x_index = y_plot.index(max(y_plot))
-        # plt.axvline(x_plot[x_index], color='red')
     main_axes.legend(title=plt_label, loc="best")
-    plt.savefig(f"../Results/{sample}_fit_{plt_name}_Complex.jpg")
+    plt.savefig(f"../Results/{sample}_fit_{plt_name}.jpg")
     plt.close()
 
 
@@ -264,22 +289,22 @@ def plot_component(dfs, component):
     main_axes = plt.gca()
     main_axes.set_title(h_title)
     hep.histplot(main_axes.hist(data[component][x_var], bins=bins, log=False, facecolor="none"),
-                 color="black", yerr=True, histtype="errorbar", label='data')
+                 color="black", yerr=True, histtype="errorbar", label='Данные')
 
     main_axes.set_xlim(h_xmin * 0.9, h_xmax * 1.1)
 
     main_axes.xaxis.set_minor_locator(AutoMinorLocator())
-    main_axes.set_ylabel(f"Events/{h_bin_width}")
+    main_axes.set_ylabel(f"События/{h_bin_width} ГэВ")
     plt.savefig(f"../Results/{component}_mtw.jpg")
 
 
-obs = zfit.Space('mtw', limits=(60, 150))
+obs = zfit.Space('mtw', limits=(60, 180))
 initial_parameters = {'diboson': {'mu': 81., 'sigma': 15., 'nl': 26., 'alphal': 10., 'nr': 85., 'alphar': 1.5},
                       'ttbar': {'mu': 77., 'sigma': 23., 'nl': 350., 'alphal': 5.6, 'nr': 17., 'alphar': 0.8},
                       'single top': {'mu': 80., 'sigma': 16., 'nl': 2., 'alphal': 0.6, 'nr': 110., 'alphar': 1.},
                       'Z+jets': {'mu': 73., 'sigma': 16., 'nl': 2., 'alphal': 0.6, 'nr': 110., 'alphar': 1.},
 
-                      'W': {'mu': 77., 'sigma': 16., 'nl': 14., 'alphal': 1.5, 'nr': 10., 'alphar': 1.3},
+                      'W+jets': {'mu': 77., 'sigma': 16., 'nl': 14., 'alphal': 1.5, 'nr': 10., 'alphar': 1.3},
                       'W + 0 jets': {'mu': 77., 'sigma': 6., 'nl': 10., 'alphal': 5.5, 'nr': 12., 'alphar': 0.5},
                       'W + 1 jet': {'mu': 82., 'sigma': 13., 'nl': 10., 'alphal': 5.5, 'nr': 105., 'alphar': 1.},
                       'W + multi jets': {'mu': 81., 'sigma': 17., 'nl': 10., 'alphal': 5.5, 'nr': 135., 'alphar': 0.9},
@@ -290,27 +315,24 @@ initial_parameters = {'diboson': {'mu': 81., 'sigma': 15., 'nl': 26., 'alphal': 
                       }
 
 # {'mu': 78., 'sigma': 7., 'nl': 2., 'alphal': 8.6, 'nr': 120., 'alphar': 0.5}
+cats = {'_0j': 'jet_n == 0', '_1j': 'jet_n == 1', '_2j': 'jet_n > 1'}
+data = get_data_from_files(switch=0)
 models = {}
-data = get_data_from_files(switch=2)
-for sample in ["diboson", "ttbar", "Z+jets", "single top"]:
-    model, x = initial_fitter(data, sample, initial_parameters, obs)
-    plot_fit_result({sample: model}, data[sample], obs, sample=sample, x=x)
-    models[sample] = model
-    del data[sample]
-
-data = get_data_from_files(switch=3)
-cats = {'W + 0 jets': 'jet_n == 0', 'W + 1 jet': 'jet_n == 1', 'W + multi jets': 'jet_n > 1'}
-
 for cat_name, cat_cut in cats.items():
-    data[cat_name] = data['W+jets'].query(cat_cut)
-    model, x = initial_fitter(data, cat_name, initial_parameters, obs)
-    plot_fit_result({sample: model}, data[cat_name], obs, sample=cat_name, x=x)
-    models[cat_name] = model
-    del data[cat_name]
+    cat_models = {}
+    for sample in ["diboson", "ttbar", "Z+jets", "single top", 'W+jets']:
+        data[sample + cat_name] = data[sample].query(cat_cut)
+        model = initial_fitter(data, sample + cat_name, initial_parameters[sample], obs)
+        plot_fit_result({sample + cat_name: model}, data[sample + cat_name], obs, sample=sample + cat_name)
+        cat_models[sample + cat_name] = model
+        del data[sample + cat_name]
+    cat_model = zfit.pdf.SumPDF([cat_models[key] for key in cat_models.keys() if cat_name in key])
+    cat_models['combo_model'] = cat_model
+    plot_fit_result(cat_models, data['data'].query(cat_cut), obs, sample='data' + cat_name)
+    models['sum_model' + cat_name] = cat_model
+sum_model = zfit.pdf.SumPDF([model for model in models.values()])
+models['sum_model_tot'] = sum_model
+plot_fit_result(models, data['data'], obs, sample='data')
 
-data = get_data_from_files(switch=1)
-final_model = zfit.pdf.SumPDF([model for model in models.values()])
-models['combined model'] = final_model
-plot_fit_result(models, data['data'], obs, sample='data', x=x)
 
 

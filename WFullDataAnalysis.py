@@ -6,6 +6,7 @@ import uproot
 import time
 
 import concurrent.futures
+from multiprocessing import Process
 
 import os
 import psutil
@@ -21,12 +22,11 @@ import types
 import uproot3_methods.classes.TH1
 
 
-branches = ["runNumber", "eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "lep_phi", "lep_E", "lep_n",
+branches = ["eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "lep_phi", "lep_E", "lep_n",
             "lep_z0", "lep_charge", "lep_type", "lep_isTightID", "lep_ptcone30", "lep_etcone20",
             "lep_trackd0pvunbiased",
-            "lep_tracksigd0pvunbiased", "met_et", "met_phi", "jet_n", "jet_pt", "jet_eta", "jet_phi", "jet_E",
-            "jet_jvt",
-            "jet_MV2c10", "scaleFactor_ELE", "scaleFactor_MUON", "scaleFactor_LepTRIGGER", "scaleFactor_PILEUP",
+            "lep_tracksigd0pvunbiased", "met_et", "met_phi", "jet_n", "jet_pt", "jet_eta", "jet_phi",
+            "scaleFactor_ELE", "scaleFactor_MUON", "scaleFactor_LepTRIGGER", "scaleFactor_PILEUP",
             "mcWeight"
             ]
 pandas.options.mode.chained_assignment = None
@@ -76,7 +76,10 @@ def subtract(x, y):
 def find_lead_jet(pt, y):
     max_pt = max(pt)
     index = np.where(pt == max_pt)
-    return y[index]
+    if not len(y[index]) > 1:
+        return y[index]
+    else:
+        return y[index][0]
 
 
 def extract_from_vector(x):
@@ -88,26 +91,23 @@ def calc_weight(mcWeight, scaleFactor_ELE, scaleFactor_MUON, scaleFactor_PILEUP,
 
 
 def read_file(path, sample, branches=branches):
-    print("=====")
-    print("Processing {0} file".format(sample))
+#    print("=====")
+#    print("Processing {0} file".format(sample))
     mem = psutil.virtual_memory()
     mem_at_start = mem.available / (1024 ** 2)
-    print(f'Available Memory: {mem_at_start:.0f} MB')
+#    print(f'{sample}: Available Memory: {mem_at_start:.0f} MB')
     count = 0
     hists = {}
-    executor = concurrent.futures.ThreadPoolExecutor(4)
     start = time.time()
     batch_num = 0
     with uproot.open(path) as file:
         tree = file['mini']
         numevents = tree.num_entries
-        print(f'Total number of events in file: {numevents}')
+#        print(f'{sample}: Total number of events in file: {numevents}')
 
         for batch in tree.iterate(branches, step_size='30 MB', library='np',
-                                  decompression_executor=executor,
-                                  interpretation_executor=executor,
                                   entry_stop=numevents*fraction):
-            print('==============')
+#            print('==============')
             df = pandas.DataFrame.from_dict(batch)
             del batch
             num_before_cuts = len(df.index)
@@ -124,7 +124,7 @@ def read_file(path, sample, branches=branches):
             df.drop(["mcWeight", "scaleFactor_ELE", "scaleFactor_MUON", "scaleFactor_PILEUP", "scaleFactor_LepTRIGGER"], axis=1,
                     inplace=True)
             num_before_cuts = len(df.index)
-            print("Events before cuts: {0}".format(num_before_cuts))
+ #           print("Events before cuts: {0}".format(num_before_cuts))
             df = df.query("met_et > 30000")
             df = df.query("trigE or trigM")
 
@@ -194,6 +194,22 @@ def read_file(path, sample, branches=branches):
             df['neg_mu_eta'] = df.query('lep_type == 13 and lep_charge == -1')['lep_eta']
             df['neg_mu_eta'] = np.vectorize(abs_value)(df.neg_mu_eta)
 
+            df['lep_pt_j0'] = df.query('jet_n == 0')['lep_pt']
+            df['lep_pt_j1'] = df.query('jet_n == 1')['lep_pt']
+            df['lep_pt_j2'] = df.query('jet_n > 1')['lep_pt']
+
+            df['mtw_j0'] = df.query('jet_n == 0')['mtw']
+            df['mtw_j1'] = df.query('jet_n == 1')['mtw']
+            df['mtw_j2'] = df.query('jet_n > 1')['mtw']
+
+            df['met_et_j0'] = df.query('jet_n == 0')['met_et']
+            df['met_et_j1'] = df.query('jet_n == 1')['met_et']
+            df['met_et_j2'] = df.query('jet_n > 1')['met_et']
+
+            df['lep_eta_j0'] = df.query('jet_n == 0')['lep_eta']
+            df['lep_eta_j1'] = df.query('jet_n == 1')['lep_eta']
+            df['lep_eta_j2'] = df.query('jet_n > 1')['lep_eta']
+
             if len(df.loc[df['jet_n'] > 0].index) > 0:
                 temp_df = pandas.DataFrame()
                 temp_df['eventNumber'] = df.loc[df['jet_n'] > 0]['eventNumber']
@@ -208,8 +224,8 @@ def read_file(path, sample, branches=branches):
                 df = pandas.merge(left=df, right=temp_df, left_on='eventNumber', right_on='eventNumber', how='left')
 
             num_after_cuts = len(df.index)
-            print("Number of events after cuts: {0}".format(num_after_cuts))
-            print(f'Currently at {(count * 100 / numevents):.0f}% of events ({count}/{numevents})')
+#            print(f"{sample}: Number of events after cuts: {num_after_cuts}")
+            print(f'{sample}: Currently at {(count * 100 / numevents):.0f}% of events ({count}/{numevents})')
 
             for key, hist in hist_dicts.items():
                 h_bin_width = hist["bin_width"]
@@ -248,35 +264,35 @@ def read_file(path, sample, branches=branches):
             # diagnostics
             mem = psutil.virtual_memory()
             actual_mem = mem.available/(1024 ** 2)
-            print(f'Current available memory {actual_mem:.0f} MB '
-                  f'({100*actual_mem/mem_at_start:.0f}% of what we started with)')
+ #           print(f'{sample}: Current available memory {actual_mem:.0f} MB '
+ #                 f'({100*actual_mem/mem_at_start:.0f}%)')
 
     file = uproot3.recreate(f'../Output/{sample}.root', uproot3.ZLIB(4))
 
     for key, hist in hists.items():
 
         file[key] = hist
-        print(f'{key} histogram')
-        file[key].show()
+ #       print(f'{key} histogram')
+  #      file[key].show()
 
     file.close()
 
     mem = psutil.virtual_memory()
     actual_mem = mem.available / (1024 ** 2)
-    print(f'Current available memory {actual_mem:.0f} MB '
-          f'({100 * actual_mem / mem_at_start:.0f}% of what we started with)')
-    print('Finished!')
-    print(f'Time elapsed: {time.time() - start} seconds')
+ #   print(f'Current available memory {actual_mem:.0f} MB '
+  #        f'({100 * actual_mem / mem_at_start:.0f}% of what we started with)')
+    print(f'{sample}: Finished!')
+    print(f'{sample}: Time elapsed: {time.time() - start} seconds')
     return None
 
 
 def read_sample(sample):
-    print("###==========###")
+ #   print("###==========###")
     print("Processing: {0} SAMPLES".format(sample))
     start = time.time()
     frames = []
     for val in WSamples.samples[sample]["list"]:
-        if sample == "data":
+        if "data" in sample:
             prefix = "Data/"
         else:
             prefix = "MC/mc_{0}.".format(infofile.infos[val]["DSID"])
@@ -285,21 +301,21 @@ def read_sample(sample):
             read_file(path, val)
         else:
             raise ValueError("Error! {0} not found!".format(val))
-    print("###==========###")
+#    print("###==========###")
     print("Finished processing {0} samples".format(sample))
     print("Time elapsed: {0} seconds".format(time.time() - start))
     return None
 
 
-def getting_data_main():
-    switch = 0
+def getting_data_main(switch=0):
     if switch == 0:
-        samples = ["data", "diboson", "ttbar", "Z+jets", "single top", "W+jets"]
+        samples = ["data_1", "diboson"]
     elif switch == 1:
-        samples = ["data"]
+        samples = ["data_2", 'ttbar']
     elif switch == 2:
-        samples = ["diboson", "ttbar",
-                   "Z+jets", "single top", "W+jets"]
+        samples = ['W+jets_1', 'Z+jets']
+    elif switch == 3:
+        samples = ['W+jets_2', "single top"]
     else:
         raise ValueError("Option {0} cannot be processed".format(switch))
     for s in samples:
@@ -307,5 +323,16 @@ def getting_data_main():
     return None
 
 
-getting_data_main()
-# read_file(path=common_path+'Data/data_A.1lep.root', sample='data_A')
+def runInParallel(*fns):
+    proc = []
+    i = 0
+    for fn in fns:
+        p = Process(target=fn, args=(i,))
+        p.start()
+        proc.append(p)
+        i += 1
+    for p in proc:
+        p.join()
+
+
+runInParallel(getting_data_main, getting_data_main, getting_data_main, getting_data_main)

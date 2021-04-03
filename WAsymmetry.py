@@ -4,15 +4,26 @@ from WHistograms import lep_asym
 import matplotlib.pyplot as plt
 import mplhep as hep
 from matplotlib.ticker import AutoMinorLocator
+import math
+
+
+from matplotlib import rc
+
+font = {'family': 'Verdana', # для вывода русских букв
+        'weight': 'normal'}
+rc('font', **font)
 
 
 def calc_asym(pos_lep_eta, neg_lep_eta):
     asym_hist = []
+    errors = []
     for pos_bin, neg_bin in zip(pos_lep_eta, neg_lep_eta):
         asym_bin = (pos_bin - neg_bin) / (pos_bin + neg_bin)
+        error = 2 * math.sqrt(pos_bin * neg_bin * (pos_bin + neg_bin)) / (pos_bin + neg_bin)**2
         asym_hist.append(asym_bin)
+        errors.append(error)
     asym_hist = np.array(asym_hist)
-    return asym_hist
+    return asym_hist, errors
 
 
 def plot_asym():
@@ -28,7 +39,6 @@ def plot_asym():
     h_xmin = hist["xmin"]
     h_xmax = hist["xmax"]
     h_xlabel = hist["xlabel"]
-    h_title = hist["title"]
 
     bins = [h_xmin + x * h_bin_width for x in range(h_num_bins + 1)]
     bin_centers = [h_xmin + h_bin_width / 2 + x * h_bin_width for x in range(h_num_bins)]
@@ -44,10 +54,13 @@ def plot_asym():
         neg_hist = {sample:
                     np.add(WPlotting.read_histogram('neg_ele_eta')[sample], WPlotting.read_histogram('neg_mu_eta')[sample])
                     for sample in ["diboson", "Z+jets", "ttbar", "single top", "W+jets", 'data']}
+        h_title = 'Зарядовая асиметрия лептонов'
     elif switch == 1:
         lep_type = 'ele'
+        h_title = 'Зарядовая асиметрия электронов'
     elif switch == 2:
         lep_type = 'mu'
+        h_title = 'Зарядовая асиметрия мюонов'
     else:
         raise ValueError('Choice is not in (0, 1, 2)')
 
@@ -57,7 +70,7 @@ def plot_asym():
         pos_hist = WPlotting.read_histogram(pos_name)
         neg_hist = WPlotting.read_histogram(neg_name)
 
-    data_asym_heights = calc_asym(pos_hist['data'], neg_hist['data'])
+    data_asym_heights, data_errors = calc_asym(pos_hist['data'], neg_hist['data'])
 
     plt.clf()
     plt.style.use(hep.style.ATLAS)
@@ -68,20 +81,22 @@ def plot_asym():
     main_axes.set_title(h_title)
 
     main_axes.errorbar(x=bin_centers, y=data_asym_heights,
-                       xerr=h_bin_width / 2,
-                       fmt='ko', label='data')
+                       xerr=h_bin_width / 2, yerr=data_errors,
+                       fmt='ko', markersize='4', label='Данные')
 
     mc_tot_heights = {pos_name: np.zeros(len(bin_centers)), neg_name: np.zeros(len(bin_centers))}
     for hist, name in zip((pos_hist, neg_hist), (pos_name, neg_name)):
         for sample in stack_order:
             mc_heights = hist[sample]
             mc_tot_heights[name] = np.add(mc_tot_heights[name], mc_heights)
-    mc_asym_heights = calc_asym(mc_tot_heights[pos_name], mc_tot_heights[neg_name])
+    mc_asym_heights, mc_errors = calc_asym(mc_tot_heights[pos_name], mc_tot_heights[neg_name])
+    mc_errors = np.asarray(mc_errors)
     main_axes.bar(x=bin_centers, height=mc_asym_heights, width=h_bin_width,
-                  color='lightblue', label='MC Simulation')
-
+                  color='lightblue', label='Симуляция МК')
+    main_axes.bar(bin_centers, 2 * mc_errors, bottom=mc_asym_heights - mc_errors, alpha=0.5, color='none', hatch="////",
+                  width=h_bin_width, label='Погрешность')
     handles, labels = main_axes.get_legend_handles_labels()
-    main_axes.legend(reversed(handles), reversed(labels), title=plot_label, loc="upper right")
+    main_axes.legend(handles, labels, title=plot_label, loc="upper left")
     main_axes.set_xlim(h_xmin, h_xmax)
 
     main_axes.xaxis.set_minor_locator(AutoMinorLocator())
@@ -93,13 +108,13 @@ def plot_asym():
     ratio_axes = plt.gca()
     ratio_axes.errorbar(bin_centers, data_asym_heights / mc_asym_heights, xerr=h_bin_width / 2.,
                         fmt='.', color="black")
-    ratio_axes.set_ylim(0.65, 1.35)
-    ratio_axes.set_yticks([0.75, 1., 1.25])
+    ratio_axes.set_ylim(0.1, 1.9)
+    ratio_axes.set_yticks([0.25, 1., 1.75])
     ratio_axes.set_xlim(h_xmin, h_xmax)
     ratio_axes.xaxis.set_minor_locator(AutoMinorLocator())
 
-    main_axes.set_ylabel(f"Charge Asymmetry")
-    ratio_axes.set_ylabel("Ratio\nData/MC")
+    main_axes.set_ylabel(f"Зарядовая асимметрия")
+    ratio_axes.set_ylabel("Данные/МК")
     ratio_axes.set_xlabel(h_xlabel)
     plt.grid("True", axis="y", color="black", linestyle="--")
 
