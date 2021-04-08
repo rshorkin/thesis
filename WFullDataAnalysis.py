@@ -21,7 +21,6 @@ from WHistograms import hist_dicts
 import types
 import uproot3_methods.classes.TH1
 
-
 branches = ["eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "lep_phi", "lep_E", "lep_n",
             "lep_z0", "lep_charge", "lep_type", "lep_isTightID", "lep_ptcone30", "lep_etcone20",
             "lep_trackd0pvunbiased",
@@ -32,7 +31,7 @@ branches = ["eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "lep_phi", "le
 pandas.options.mode.chained_assignment = None
 
 lumi = 10  # 10 fb-1
-fraction = 1.
+fraction = .01
 common_path = "/media/sf_Shared/data_13TeV/1lep/"
 # save_choice = int(input("Save dataframes? 0 for no, 1 for yes\n")) todo
 save_choice = 0
@@ -86,16 +85,51 @@ def extract_from_vector(x):
     return x[0]
 
 
+def calc_W_phi(lep_pt, met_et, lep_phi, met_phi):
+
+    px_lep = lep_pt * np.cos(lep_phi)
+    px_nu = met_et * np.cos(met_phi)
+    py_lep = lep_pt * np.sin(lep_phi)
+    py_nu = met_et * np.sin(met_phi)
+
+    if np.sqrt((px_nu + px_lep)**2 + (py_lep + py_nu)**2) != 0:
+        if px_nu + px_lep >= 0:
+            sin_W_phi = (py_lep + py_nu)/np.sqrt((px_nu + px_lep)**2 + (py_lep + py_nu)**2)
+            W_phi = np.arcsin(sin_W_phi)
+        else:
+            sin_W_phi = (py_lep + py_nu) / np.sqrt((px_nu + px_lep) ** 2 + (py_lep + py_nu) ** 2)
+            W_phi = np.pi * math.copysign(1., np.arcsin(sin_W_phi)) - np.arcsin(sin_W_phi)
+    else:
+        if lep_pt > met_et:
+            W_phi = lep_phi
+        elif lep_pt < met_et:
+            W_phi = met_phi
+        else:
+            W_phi = None
+
+    del px_nu, py_nu, px_lep, py_lep
+    return W_phi
+
+
+def calc_delta_phi(phi_1, phi_2):
+    if phi_1 - phi_2 > math.pi:
+        return phi_1 - phi_2 - 2 * math.pi
+    elif phi_1 - phi_2 < -math.pi:
+        return phi_1 - phi_2 + 2 * math.pi
+    else:
+        return phi_1 - phi_2
+
+
 def calc_weight(mcWeight, scaleFactor_ELE, scaleFactor_MUON, scaleFactor_PILEUP, scaleFactor_LepTRIGGER):
     return mcWeight * scaleFactor_ELE * scaleFactor_MUON * scaleFactor_PILEUP * scaleFactor_LepTRIGGER
 
 
 def read_file(path, sample, branches=branches):
-#    print("=====")
-#    print("Processing {0} file".format(sample))
+    #    print("=====")
+    #    print("Processing {0} file".format(sample))
     mem = psutil.virtual_memory()
     mem_at_start = mem.available / (1024 ** 2)
-#    print(f'{sample}: Available Memory: {mem_at_start:.0f} MB')
+    #    print(f'{sample}: Available Memory: {mem_at_start:.0f} MB')
     count = 0
     hists = {}
     start = time.time()
@@ -103,11 +137,11 @@ def read_file(path, sample, branches=branches):
     with uproot.open(path) as file:
         tree = file['mini']
         numevents = tree.num_entries
-#        print(f'{sample}: Total number of events in file: {numevents}')
+        #        print(f'{sample}: Total number of events in file: {numevents}')
 
         for batch in tree.iterate(branches, step_size='30 MB', library='np',
-                                  entry_stop=numevents*fraction):
-#            print('==============')
+                                  entry_stop=numevents * fraction):
+            #            print('==============')
             df = pandas.DataFrame.from_dict(batch)
             del batch
             num_before_cuts = len(df.index)
@@ -121,10 +155,11 @@ def read_file(path, sample, branches=branches):
             elif "single" in sample:
                 df["totalWeight"] = df["mcWeight"].apply(top_weight)
 
-            df.drop(["mcWeight", "scaleFactor_ELE", "scaleFactor_MUON", "scaleFactor_PILEUP", "scaleFactor_LepTRIGGER"], axis=1,
+            df.drop(["mcWeight", "scaleFactor_ELE", "scaleFactor_MUON", "scaleFactor_PILEUP", "scaleFactor_LepTRIGGER"],
+                    axis=1,
                     inplace=True)
             num_before_cuts = len(df.index)
- #           print("Events before cuts: {0}".format(num_before_cuts))
+            #           print("Events before cuts: {0}".format(num_before_cuts))
             df = df.query("met_et > 30000")
             df = df.query("trigE or trigM")
 
@@ -176,6 +211,7 @@ def read_file(path, sample, branches=branches):
             gc.collect()
 
             # df = df.sort_values(by="entry")
+            df['WT_phi'] = np.vectorize(calc_W_phi)(df.lep_pt, df.met_et, df.lep_phi, df.met_phi)
 
             df["met_et"] = df["met_et"] / 1000
             df['lep_E'] = df['lep_E'] / 1000
@@ -218,13 +254,18 @@ def read_file(path, sample, branches=branches):
                         temp_df[f'lead_{column}'] = np.vectorize(find_lead_jet)(df.loc[df['jet_n'] > 0]['jet_pt'],
                                                                                 df.loc[df['jet_n'] > 0][column])
                 temp_df['lead_jet_pt'] = temp_df['lead_jet_pt'] / 1000.
-                temp_df['phi_diff'] = np.vectorize(subtract)(df.loc[df['jet_n'] > 0]['lep_phi'],
-                                                             temp_df['lead_jet_phi'])
-                temp_df['abs_phi_diff'] = np.vectorize(abs_value)(temp_df.phi_diff)
+
+                temp_df['lj_phi_diff'] = np.vectorize(calc_delta_phi)(df.loc[df['jet_n'] > 0]['lep_phi'],
+                                                                      temp_df['lead_jet_phi'])
+                temp_df['abs_lj_phi_diff'] = np.vectorize(abs_value)(temp_df.lj_phi_diff)
+
+                temp_df['Wj_phi_diff'] = np.vectorize(calc_delta_phi)(df.loc[df['jet_n'] > 0]['WT_phi'],
+                                                                      temp_df['lead_jet_phi'])
+                temp_df['abs_Wj_phi_diff'] = np.vectorize(abs_value)(temp_df.Wj_phi_diff)
                 df = pandas.merge(left=df, right=temp_df, left_on='eventNumber', right_on='eventNumber', how='left')
 
             num_after_cuts = len(df.index)
-#            print(f"{sample}: Number of events after cuts: {num_after_cuts}")
+            #            print(f"{sample}: Number of events after cuts: {num_after_cuts}")
             print(f'{sample}: Currently at {(count * 100 / numevents):.0f}% of events ({count}/{numevents})')
 
             for key, hist in hist_dicts.items():
@@ -252,42 +293,45 @@ def read_file(path, sample, branches=branches):
 
             f['FitTree'] = uproot3.newtree({'mtw': uproot3.newbranch(np.float64, 'mtw'),
                                             'jet_n': uproot3.newbranch(np.int32, 'jet_n'),
-                                            'totalWeight': uproot3.newbranch(np.float64, 'totalWeight')})
+                                            'totalWeight': uproot3.newbranch(np.float64, 'totalWeight'),
+                                            'lep_pt': uproot3.newbranch(np.float64, 'lep_pt'),
+                                            'met_et': uproot3.newbranch(np.float64, 'met_et')})
 
             f['FitTree'].extend({'mtw': df['mtw'].to_numpy(dtype=np.float64),
                                  'jet_n': df['jet_n'].to_numpy(dtype=np.int32),
-                                 'totalWeight': df['totalWeight'].to_numpy(dtype=np.float64)})
+                                 'totalWeight': df['totalWeight'].to_numpy(dtype=np.float64),
+                                 'lep_pt': df['lep_pt'].to_numpy(dtype=np.float64),
+                                 'met_et': df['met_et'].to_numpy(dtype=np.float64)})
             f.close()
             batch_num += 1
             del df
             gc.collect()
             # diagnostics
             mem = psutil.virtual_memory()
-            actual_mem = mem.available/(1024 ** 2)
- #           print(f'{sample}: Current available memory {actual_mem:.0f} MB '
- #                 f'({100*actual_mem/mem_at_start:.0f}%)')
+            actual_mem = mem.available / (1024 ** 2)
+    #           print(f'{sample}: Current available memory {actual_mem:.0f} MB '
+    #                 f'({100*actual_mem/mem_at_start:.0f}%)')
 
     file = uproot3.recreate(f'../Output/{sample}.root', uproot3.ZLIB(4))
 
     for key, hist in hists.items():
-
         file[key] = hist
- #       print(f'{key} histogram')
-  #      file[key].show()
+    #       print(f'{key} histogram')
+    #      file[key].show()
 
     file.close()
 
     mem = psutil.virtual_memory()
     actual_mem = mem.available / (1024 ** 2)
- #   print(f'Current available memory {actual_mem:.0f} MB '
-  #        f'({100 * actual_mem / mem_at_start:.0f}% of what we started with)')
+    #   print(f'Current available memory {actual_mem:.0f} MB '
+    #        f'({100 * actual_mem / mem_at_start:.0f}% of what we started with)')
     print(f'{sample}: Finished!')
     print(f'{sample}: Time elapsed: {time.time() - start} seconds')
     return None
 
 
 def read_sample(sample):
- #   print("###==========###")
+    #   print("###==========###")
     print("Processing: {0} SAMPLES".format(sample))
     start = time.time()
     frames = []
@@ -301,7 +345,7 @@ def read_sample(sample):
             read_file(path, val)
         else:
             raise ValueError("Error! {0} not found!".format(val))
-#    print("###==========###")
+    #    print("###==========###")
     print("Finished processing {0} samples".format(sample))
     print("Time elapsed: {0} seconds".format(time.time() - start))
     return None

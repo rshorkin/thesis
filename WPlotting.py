@@ -9,7 +9,7 @@ import WSamples
 import mplhep as hep
 from WHistograms import hist_dicts
 
-from matplotlib.ticker import AutoMinorLocator,LogLocator,LogFormatterSciNotation
+from matplotlib.ticker import AutoMinorLocator, LogLocator, LogFormatterSciNotation
 
 from matplotlib import rc
 
@@ -112,15 +112,19 @@ def plot_histogram(hist_name, scale='linear'):
     main_axes.set_xlim(h_xmin, h_xmax)
     if not scale == 'log':
         if 'phi' in hist_name:
-            factor = 1.5
+            factor = 1.65
         else:
             factor = 1.25
         main_axes.set_ylim(bottom=0,
                            top=(max([np.amax(hist_heights['data']), np.amax(mc_tot_heights)]) * factor))
     else:
+        if 'phi' in hist_name:
+            factor = 1000
+        else:
+            factor = 100
         main_axes.set_yscale('log')
         bottom = min(hist_heights[stack_order[0]])
-        top = np.amax(hist_heights['data']) * 100
+        top = np.amax(hist_heights['data']) * factor
         main_axes.set_ylim(bottom=bottom, top=top)
         main_axes.yaxis.set_major_formatter(CustomTicker())
         locmin = LogLocator(base=10.0, subs=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9), numticks=12)
@@ -163,7 +167,7 @@ def plotting_main():
     for hist_name in hist_dicts.keys():
         if 'neg' in hist_name or 'pos' in hist_name:
             continue
-        plot_histogram(hist_name, 'linear')
+        plot_histogram(hist_name, 'log')
     print('Plotting finished')
 
 
