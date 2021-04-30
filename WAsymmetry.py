@@ -96,20 +96,24 @@ def plot_asym():
     main_axes.bar(bin_centers, 2 * mc_errors, bottom=mc_asym_heights - mc_errors, alpha=0.5, color='none', hatch="////",
                   width=h_bin_width, label='Погрешность')
     handles, labels = main_axes.get_legend_handles_labels()
-    main_axes.legend(handles, labels, title=plot_label, loc="upper left")
+    main_axes.legend(handles, labels, loc='upper right', bbox_transform=main_axes.transAxes)
     main_axes.set_xlim(h_xmin, h_xmax)
 
     main_axes.xaxis.set_minor_locator(AutoMinorLocator())
 
     main_axes.set_xticklabels([])
 
+    factor = 1.25
+    main_axes.set_ylim(bottom=0.04,
+                       top=(max([np.amax(data_asym_heights), np.amax(mc_asym_heights)]) * factor))
+
     plt.axes([0.1, 0.1, 0.85, 0.2])
     plt.yscale("linear")
     ratio_axes = plt.gca()
     ratio_axes.errorbar(bin_centers, data_asym_heights / mc_asym_heights, xerr=h_bin_width / 2.,
                         fmt='.', color="black")
-    ratio_axes.set_ylim(0.1, 1.9)
-    ratio_axes.set_yticks([0.25, 1., 1.75])
+    ratio_axes.set_ylim(0.25, 1.75)
+    ratio_axes.set_yticks([0.5, 1., 1.5])
     ratio_axes.set_xlim(h_xmin, h_xmax)
     ratio_axes.xaxis.set_minor_locator(AutoMinorLocator())
 
@@ -117,6 +121,13 @@ def plot_asym():
     ratio_axes.set_ylabel("Данные/МК")
     ratio_axes.set_xlabel(h_xlabel)
     plt.grid("True", axis="y", color="black", linestyle="--")
+
+    plt.text(0.05, 0.97, 'ATLAS Open Data', ha="left", va="top", family='sans-serif', transform=main_axes.transAxes,
+             fontsize=20)
+    plt.text(0.05, 0.9, r'$\sqrt{s}=13\,\mathrm{TeV},\;\int\, L\,dt=$' + '10' + '$\,\mathrm{fb}^{-1}$', ha="left",
+             va="top", family='sans-serif', fontsize=16, transform=main_axes.transAxes)
+    plt.text(0.05, 0.83, plot_label, ha="left", va="top", family='sans-serif',
+             fontsize=14, transform=main_axes.transAxes)
 
     plt.savefig(f'../Results/asym_{lep_type}.jpeg')
     return None

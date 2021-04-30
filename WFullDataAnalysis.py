@@ -31,7 +31,7 @@ branches = ["eventNumber", "trigE", "trigM", "lep_pt", "lep_eta", "lep_phi", "le
 pandas.options.mode.chained_assignment = None
 
 lumi = 10  # 10 fb-1
-fraction = .01
+fraction = 1.
 common_path = "/media/sf_Shared/data_13TeV/1lep/"
 # save_choice = int(input("Save dataframes? 0 for no, 1 for yes\n")) todo
 save_choice = 0

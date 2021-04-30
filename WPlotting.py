@@ -57,10 +57,15 @@ def plot_histogram(hist_name, scale='linear'):
     if '0' in hist_name:
         mc_labels_ru['W+jets'] = 'W'
         mc_labels_ru['Z+jets'] = 'Z'
+        plot_label = "$W \\rightarrow l\\nu;\;число\;струй\,=\,0$"
     elif '1' in hist_name:
         mc_labels_ru['W+jets'] = 'Wj'
         mc_labels_ru['Z+jets'] = 'Zj'
-    plot_label = "$W \\rightarrow l\\nu$"
+        plot_label = "$W \\rightarrow l\\nu;\;число\;струй\,=\,1$"
+    elif '2' in hist_name:
+        plot_label = "$W \\rightarrow l\\nu;\;число\;струй\,>\,1$"
+    else:
+        plot_label = "$W \\rightarrow l\\nu$"
     lumi_used = '10'
     print("==========")
     print("Plotting {0} histogram".format(hist_name))
@@ -106,7 +111,7 @@ def plot_histogram(hist_name, scale='linear'):
     main_axes.bar(bin_centers, 2 * mc_x_err, bottom=mc_tot_heights - mc_x_err, alpha=0.5, color='none', hatch="////",
                   width=h_bin_width, label='Стат. погр.')
     handles, labels = main_axes.get_legend_handles_labels()
-    legend = main_axes.legend(reversed(handles), reversed(labels), title=plot_label, loc="upper right", frameon=1)
+    legend = main_axes.legend(reversed(handles), reversed(labels), loc="upper right", frameon=1)
     frame = legend.get_frame()
     frame.set_facecolor('white')
     main_axes.set_xlim(h_xmin, h_xmax)
@@ -123,7 +128,7 @@ def plot_histogram(hist_name, scale='linear'):
         else:
             factor = 100
         main_axes.set_yscale('log')
-        bottom = min(hist_heights[stack_order[0]])
+        bottom = min(hist_heights[stack_order[0]])*0.7
         top = np.amax(hist_heights['data']) * factor
         main_axes.set_ylim(bottom=bottom, top=top)
         main_axes.yaxis.set_major_formatter(CustomTicker())
@@ -140,8 +145,14 @@ def plot_histogram(hist_name, scale='linear'):
     ratio_axes.bar(bin_centers, 2 * mc_x_err / mc_tot_heights, bottom=1 - mc_x_err / mc_tot_heights,
                    alpha=0.5, color='none',
                    hatch="////", width=h_bin_width)
-    ratio_axes.set_ylim(0, 2.5)
-    ratio_axes.set_yticks([0, 1, 2])
+    if hist_name not in ('met_et_j0', 'lep_pt_j0'):
+        ratio_axes.set_ylim(0.5, 1.5)
+        ratio_axes.set_yticks([0.75, 1, 1.25])
+    else:
+        ratio_axes.set_ylim(0.0, 2.0)
+        ratio_axes.set_yticks([0.5, 1, 1.5])
+        y_ticks = ratio_axes.yaxis.get_major_ticks()
+        # y_ticks[0].label1.set_visible(False)
     ratio_axes.set_xlim(h_xmin, h_xmax)
     ratio_axes.xaxis.set_minor_locator(AutoMinorLocator())
 
@@ -154,8 +165,10 @@ def plot_histogram(hist_name, scale='linear'):
              fontsize=20)
     plt.text(0.05, 0.9, r'$\sqrt{s}=13\,\mathrm{TeV},\;\int\, L\,dt=$' + lumi_used + '$\,\mathrm{fb}^{-1}$', ha="left",
              va="top", family='sans-serif', fontsize=16, transform=main_axes.transAxes)
+    plt.text(0.05, 0.83, plot_label, ha="left", va="top", family='sans-serif',
+             fontsize=14, transform=main_axes.transAxes)
     main_axes.set_ylabel(f"События / {h_bin_width} {y_units}")
-    ratio_axes.set_ylabel("Отношение\nДанные/МК")
+    ratio_axes.set_ylabel("Данные/МК")
     ratio_axes.set_xlabel(h_xlabel)
     plt.grid("True", axis="y", color="black", linestyle="--")
     plt.savefig(f'../Results/{hist_name}_{scale}.jpeg')
@@ -164,10 +177,17 @@ def plot_histogram(hist_name, scale='linear'):
 
 def plotting_main():
     print('Started plotting')
+    switch = int(input('What format would you like to use for Y scale? 0 for log, 1 for linear\n'))
+    if switch == 0:
+        yscale = 'log'
+    elif switch == 1:
+        yscale = 'linear'
+    else:
+        raise ValueError('Selected value not in (0, 1)')
     for hist_name in hist_dicts.keys():
         if 'neg' in hist_name or 'pos' in hist_name:
             continue
-        plot_histogram(hist_name, 'log')
+        plot_histogram(hist_name, yscale)
     print('Plotting finished')
 
 

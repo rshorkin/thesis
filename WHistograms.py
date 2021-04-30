@@ -13,7 +13,7 @@ etmiss_j0 = {"bin_width": 5,
              "xmax": 200,
              "xlabel": "$E^{miss}_T$, [ГэВ]",
              "xvariable": "met_et_j0",
-             "title": "Недостающая поперечная энергия (0 струй)",
+             "title": "Недостающая поперечная энергия",
              }
 
 etmiss_j1 = {"bin_width": 5,
@@ -22,7 +22,7 @@ etmiss_j1 = {"bin_width": 5,
              "xmax": 200,
              "xlabel": "$E^{miss}_T$, [ГэВ]",
              "xvariable": "met_et_j1",
-             "title": "Недостающая поперечная энергия (1 струя)",
+             "title": "Недостающая поперечная энергия",
              }
 
 etmiss_j2 = {"bin_width": 5,
@@ -31,7 +31,7 @@ etmiss_j2 = {"bin_width": 5,
              "xmax": 200,
              "xlabel": "$E^{miss}_T$, [ГэВ]",
              "xvariable": "met_et_j2",
-             "title": "Недостающая поперечная энергия (много струй)",
+             "title": "Недостающая поперечная энергия",
              }
 
 mtw = {"bin_width": 5,
@@ -48,7 +48,7 @@ mtw_j0 = {"bin_width": 5,
           "xmax": 180,
           "xlabel": "$M^W_T$, [ГэВ]",
           "xvariable": "mtw_j0",
-          "title": "Поперечная масса W (0 струй)"}
+          "title": "Поперечная масса W"}
 
 mtw_j1 = {"bin_width": 5,
           "numbins": 24,
@@ -56,7 +56,7 @@ mtw_j1 = {"bin_width": 5,
           "xmax": 180,
           "xlabel": "$M^W_T$, [ГэВ]",
           "xvariable": "mtw_j1",
-          "title": "Поперечная масса W (1 струя)"}
+          "title": "Поперечная масса W"}
 
 mtw_j2 = {"bin_width": 5,
           "numbins": 24,
@@ -64,7 +64,7 @@ mtw_j2 = {"bin_width": 5,
           "xmax": 180,
           "xlabel": "$M^W_T$, [ГэВ]",
           "xvariable": "mtw_j2",
-          "title": "Поперечная масса W (много струй)"}
+          "title": "Поперечная масса W"}
 
 mtw_enu = {"bin_width": 5,
            "numbins": 24,
@@ -104,7 +104,7 @@ lep_pt_j0 = {"bin_width": 5,
              "xmax": 200,
              "xlabel": "$p_T^{lep}$, [ГэВ]",
              "xvariable": "lep_pt_j0",
-             "title": "Поперечный импульс лептона (0 струй)"}
+             "title": "Поперечный импульс лептона"}
 
 lep_pt_j1 = {"bin_width": 5,
              "numbins": 33,
@@ -112,7 +112,7 @@ lep_pt_j1 = {"bin_width": 5,
              "xmax": 200,
              "xlabel": "$p_T^{lep}$, [ГэВ]",
              "xvariable": "lep_pt_j1",
-             "title": "Поперечный импульс лептона (1 струя)"}
+             "title": "Поперечный импульс лептона"}
 
 lep_pt_j2 = {"bin_width": 5,
              "numbins": 33,
@@ -120,7 +120,7 @@ lep_pt_j2 = {"bin_width": 5,
              "xmax": 200,
              "xlabel": "$p_T^{lep}$, [ГэВ]",
              "xvariable": "lep_pt_j2",
-             "title": "Поперечный импульс лептона (много струй)"}
+             "title": "Поперечный импульс лептона"}
 
 lep_eta = {"bin_width": 0.25,
            "numbins": 20,
@@ -130,13 +130,29 @@ lep_eta = {"bin_width": 0.25,
            "xvariable": "lep_eta",
            "title": "Псевдобыстрота лептона"}
 
+mu_eta = {"bin_width": 0.25,
+           "numbins": 20,
+           "xmin": -2.5,
+           "xmax": 2.5,
+           "xlabel": "$\eta^{mu}$",
+           "xvariable": "mu_eta",
+           "title": "Псевдобыстрота мюона"}
+
+ele_eta = {"bin_width": 0.25,
+           "numbins": 20,
+           "xmin": -2.5,
+           "xmax": 2.5,
+           "xlabel": "$\eta^{e}$",
+           "xvariable": "e_eta",
+           "title": "Псевдобыстрота электрона"}
+
 lep_eta_j0 = {"bin_width": 0.25,
               "numbins": 20,
               "xmin": -2.5,
               "xmax": 2.5,
               "xlabel": "$\eta^{lep}$",
               "xvariable": "lep_eta_j0",
-              "title": "Псевдобыстрота лептона (0 струй)"}
+              "title": "Псевдобыстрота лептона"}
 
 lep_eta_j1 = {"bin_width": 0.25,
               "numbins": 20,
@@ -144,7 +160,7 @@ lep_eta_j1 = {"bin_width": 0.25,
               "xmax": 2.5,
               "xlabel": "$\eta^{lep}$",
               "xvariable": "lep_eta_j1",
-              "title": "Псевдобыстрота лептона (1 струя)"}
+              "title": "Псевдобыстрота лептона"}
 
 lep_eta_j2 = {"bin_width": 0.25,
               "numbins": 20,
@@ -152,7 +168,7 @@ lep_eta_j2 = {"bin_width": 0.25,
               "xmax": 2.5,
               "xlabel": "$\eta^{lep}$",
               "xvariable": "lep_eta_j2",
-              "title": "Псевдобыстрота лептона (много струй)"}
+              "title": "Псевдобыстрота лептона"}
 
 jet_n = {"bin_width": 1,
          "numbins": 7,
