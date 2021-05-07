@@ -138,7 +138,7 @@ def initial_fitter(data, sample, initial_parameters, obs):
     DCB = zfit.pdf.DoubleCB(obs=obs, mu=mu, sigma=sigma, alphal=alphal, nl=nl, alphar=alphar, nr=nr)
     DCB = DCB.create_extended(n_bgr)
 
-    mu_g = zfit.Parameter(f"mu_CB_{sample}", 40., 10., 77.)
+    mu_g = zfit.Parameter(f"mu_CB_{sample}", 76, 10., 77.)
     sigma_g = zfit.Parameter(f'sigma_CB_{sample}', 80., 1., 200.)
     ad_yield = zfit.Parameter(f'yield_CB_{sample}', int(0.15 * bgr_yield), 0., int(1.3 * bgr_yield), step_size=1)
     alphal = zfit.Parameter(f'alpha_CB_{sample}', 2.6, 0.001, 20.)
@@ -157,6 +157,14 @@ def initial_fitter(data, sample, initial_parameters, obs):
     # Create minimizer
     minimizer = zfit.minimize.Minuit(verbosity=0, use_minuit_grad=True)
     result = minimizer.minimize(nll)
+
+    mu_1 = zfit.run(mu)
+    mu_2 = zfit.run(mu_g)
+
+    w_1 = zfit.run(n_bgr)
+    w_2 = zfit.run(ad_yield)
+
+    mu_mean = (mu_1 * w_1 + mu_2 * w_2)/(w_1 + w_2)
     if result.valid:
         print("Result is valid")
         print("Converged:", result.converged)
@@ -164,16 +172,17 @@ def initial_fitter(data, sample, initial_parameters, obs):
         print(result.params)
         if not model.is_extended:
             raise Warning('MODEL NOT EXTENDED')
-        return model
+        return model, [mu_1, mu_2, mu_mean]
+
     else:
         print('Minimization failed')
         print(result.params)
-        return model
+        return model, [mu_1, mu_2, mu_mean]
 
 
 # Plotting
 
-def plot_fit_result(models, data, obs, sample='data'):
+def plot_fit_result(models, data, obs, sample='data', mus=None):
     plt_name = "mtw"
     print(f'Plotting {sample}')
 
@@ -210,7 +219,7 @@ def plot_fit_result(models, data, obs, sample='data'):
     plt.clf()
     plt.style.use(hep.style.ATLAS)
     _ = plt.figure(figsize=(9.5, 9))
-    plt.axes([0.1, 0.10, 0.85, 0.85])
+    plt.axes([0.105, 0.10, 0.85, 0.85])
     main_axes = plt.gca()
     if sample != 'data':
         hist_label = mc_labels_ru[sample[:-3]]
@@ -232,14 +241,15 @@ def plot_fit_result(models, data, obs, sample='data'):
              va="top", family='sans-serif', fontsize=16, transform=main_axes.transAxes)
     x_plot = np.linspace(lower[-1][0], upper[0][0], num=1000)
     data_bins = np.asarray(bin_centers)
-    print('Data bin centers:')
-    print(data_bins)
-    print(f'A total of {h_num_bins} bin centers')
     for model_name, model in models.items():
         if model.is_extended:
             if 'combo' not in model_name and 'sum' not in model_name:
-                main_axes.plot(x_plot, model.ext_pdf(x_plot) * obs.area() / h_num_bins,
-                               label=mc_labels_ru[model_name[:-3]] + ' модель')
+                if len(models) == 1:
+                    main_axes.plot(x_plot, model.ext_pdf(x_plot) * obs.area() / h_num_bins,
+                                   label="Аппроксимирующая функция")
+                else:
+                    main_axes.plot(x_plot, model.ext_pdf(x_plot) * obs.area() / h_num_bins,
+                                   label=mc_labels_ru[model_name[:-3]])
                 chisq, p_val = chisquare(data_x, model.ext_pdf(data_bins) * obs.area() / h_num_bins)
             elif 'j' not in model_name:
                 main_axes.plot(x_plot, model.ext_pdf(x_plot) * obs.area() / h_num_bins,
@@ -254,13 +264,15 @@ def plot_fit_result(models, data, obs, sample='data'):
             elif '2' in model_name:
                 main_axes.plot(x_plot, model.ext_pdf(x_plot) * obs.area() / h_num_bins,
                                label='Вклад с многими струями', color='red')
-            print(f'-----\nData Values:\n{data_x}')
-            print(f'-----\nModel Values:\n{model.ext_pdf(data_bins) * obs.area() / h_num_bins}')
         else:
             main_axes.plot(x_plot, model.pdf(x_plot) * plot_scale, label=model_name)
     main_axes.legend(title=plt_label, loc="best")
-    text = f'$\chi^2$ = {chisq}\np = {p_val}'
-    plt.text(0.7, 0.6, text, transform=main_axes.transAxes)
+    # text = f'$\chi^2$ = {chisq:.1f}\np = {p_val:.2f}'
+    # plt.text(0.7, 0.6, text, transform=main_axes.transAxes)
+    if mus is not None:
+        for mu in mus:
+            print(f'{mu}')
+        #    plt.axvline(x=mu, color='red')
     plt.savefig(f"../FitResults/{sample}_fit_{plt_name}.jpg")
     plt.close()
 
@@ -295,7 +307,7 @@ def plot_component(dfs, component):
     hep.histplot(main_axes.hist(dfs[component][x_var], bins=bins, log=False, facecolor="none"),
                  color="black", yerr=True, histtype="errorbar", label='Данные')
 
-    main_axes.set_xlim(h_xmin * 0.9, h_xmax * 1.1)
+    main_axes.set_xlim(h_xmin, h_xmax)
 
     main_axes.xaxis.set_minor_locator(AutoMinorLocator())
     main_axes.set_ylabel(f"События/{h_bin_width} ГэВ")
@@ -327,8 +339,8 @@ def MainFit():
         cat_models = {}
         for sample in ["diboson", "ttbar", "Z+jets", "single top", 'W+jets']:
             data[sample + cat_name] = data[sample].query(cat_cut)
-            model = initial_fitter(data, sample + cat_name, initial_parameters[sample], obs)
-            plot_fit_result({sample + cat_name: model}, data[sample + cat_name], obs, sample=sample + cat_name)
+            model, mus = initial_fitter(data, sample + cat_name, initial_parameters[sample], obs)
+            plot_fit_result({sample + cat_name: model}, data[sample + cat_name], obs, sample=sample + cat_name, mus=mus)
             cat_models[sample + cat_name] = model
             del data[sample + cat_name]
         cat_model = zfit.pdf.SumPDF([cat_models[key] for key in cat_models.keys() if cat_name in key])
