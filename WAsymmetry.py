@@ -91,8 +91,17 @@ def plot_asym():
             mc_tot_heights[name] = np.add(mc_tot_heights[name], mc_heights)
     mc_asym_heights, mc_errors = calc_asym(mc_tot_heights[pos_name], mc_tot_heights[neg_name])
     mc_errors = np.asarray(mc_errors)
-    main_axes.bar(x=bin_centers, height=mc_asym_heights, width=h_bin_width,
-                  color='lightblue', label='Симуляция МК')
+    xs = [h_xmin]
+    ys = [mc_asym_heights[0]]
+    for i in range(h_num_bins - 1):
+        xs.append(h_xmin + h_bin_width * (1 + i))
+        xs.append(h_xmin + h_bin_width * (1 + i))
+        ys.append(mc_asym_heights[i])
+        ys.append(mc_asym_heights[i + 1])
+    xs.append(h_xmax)
+    ys.append(mc_asym_heights[-1])
+
+    main_axes.plot(xs, ys, color='blue', label='Моделирование МК')
     main_axes.bar(bin_centers, 2 * mc_errors, bottom=mc_asym_heights - mc_errors, alpha=0.5, color='none', hatch="////",
                   width=h_bin_width, label='Погрешность')
     handles, labels = main_axes.get_legend_handles_labels()

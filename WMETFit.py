@@ -129,7 +129,7 @@ def initial_fitter(data, sample, initial_parameters, obs):
     mu = zfit.Parameter(f"mu_{sample}", initial_parameters['mu'], 77., 180.)
     sigma = zfit.Parameter(f'sigma_{sample}', initial_parameters['sigma'], 1., 150.)
 
-    alphal = zfit.Parameter(f'alphal_{sample}', initial_parameters['alphal'], 0., 10.)
+    alphal = zfit.Parameter(f'alphal_{sample}', initial_parameters['alphal'], 0., 15.)
     alphar = zfit.Parameter(f'alphar_{sample}', initial_parameters['alphar'], 0., 10.)
     nl = zfit.Parameter(f'nl_{sample}', initial_parameters['nl'], 0.01, 30.)
     nr = zfit.Parameter(f'nr_{sample}', initial_parameters['nr'], 0.01, 30.)
@@ -138,8 +138,8 @@ def initial_fitter(data, sample, initial_parameters, obs):
     DCB = zfit.pdf.DoubleCB(obs=obs, mu=mu, sigma=sigma, alphal=alphal, nl=nl, alphar=alphar, nr=nr)
     DCB = DCB.create_extended(n_bgr)
 
-    mu_g = zfit.Parameter(f"mu_CB_{sample}", 76, 10., 77.)
-    sigma_g = zfit.Parameter(f'sigma_CB_{sample}', 80., 1., 200.)
+    mu_g = zfit.Parameter(f"mu_CB_{sample}", 78, 10., 79.)
+    sigma_g = zfit.Parameter(f'sigma_CB_{sample}', 20., 1., 200.)
     ad_yield = zfit.Parameter(f'yield_CB_{sample}', int(0.15 * bgr_yield), 0., int(1.3 * bgr_yield), step_size=1)
     alphal = zfit.Parameter(f'alpha_CB_{sample}', 2.6, 0.001, 20.)
     nl = zfit.Parameter(f'n_CB_{sample}', 13.4, 0.001, 30.)
@@ -149,7 +149,12 @@ def initial_fitter(data, sample, initial_parameters, obs):
     gauss = zfit.pdf.DoubleCB(mu=mu_g, sigma=sigma_g, alphal=alphal, nl=nl, alphar=alphar, nr=nr, obs=obs)
     gauss = gauss.create_extended(ad_yield)
 
-    model = zfit.pdf.SumPDF([DCB, gauss])
+    lambd = zfit.Parameter(f"lambda_{sample}", -0.05, -2., 2.)
+    exponent = zfit.pdf.Exponential(lam=lambd, obs=obs)
+    exponent = exponent.create_extended(ad_yield)
+
+    # model = zfit.pdf.SumPDF([DCB, gauss])
+    model = DCB
 
     bgr_data = format_data(df, obs)
     # Create NLL
@@ -159,16 +164,21 @@ def initial_fitter(data, sample, initial_parameters, obs):
     result = minimizer.minimize(nll)
 
     mu_1 = zfit.run(mu)
-    mu_2 = zfit.run(mu_g)
+    # mu_2 = zfit.run(mu_g)
+    mu_2 = 0.
 
     w_1 = zfit.run(n_bgr)
-    w_2 = zfit.run(ad_yield)
+    # w_2 = zfit.run(ad_yield)
+    w_2 = 0.
 
     mu_mean = (mu_1 * w_1 + mu_2 * w_2)/(w_1 + w_2)
     if result.valid:
         print("Result is valid")
         print("Converged:", result.converged)
-        # param_errors = result.hesse()
+        param_errors = result.hesse()
+        # print(result.params)
+        print(param_errors)
+     #   result.errors(method='zfit_error')
         print(result.params)
         if not model.is_extended:
             raise Warning('MODEL NOT EXTENDED')
@@ -316,12 +326,12 @@ def plot_component(dfs, component):
 
 obs = zfit.Space('mtw', limits=(60, 180))
 initial_parameters = {'diboson': {'mu': 81., 'sigma': 15., 'nl': 26., 'alphal': 5., 'nr': 20., 'alphar': 1.5},
-                      'ttbar': {'mu': 81., 'sigma': 23., 'nl': 350., 'alphal': 5.6, 'nr': 17., 'alphar': 0.8},
-                      'single top': {'mu': 80., 'sigma': 16., 'nl': 2., 'alphal': 0.6, 'nr': 20., 'alphar': 1.},
+                      'ttbar': {'mu': 81., 'sigma': 23., 'nl': 10., 'alphal': 5.6, 'nr': 17., 'alphar': 0.8},
+                      'single top': {'mu': 79., 'sigma': 21., 'nl': 21., 'alphal': 0.6, 'nr': 10., 'alphar': 1.},
                       'Z+jets': {'mu': 81., 'sigma': 16., 'nl': 2., 'alphal': 0.6, 'nr': 20., 'alphar': 1.},
 
                       'W+jets': {'mu': 81., 'sigma': 16., 'nl': 14., 'alphal': 1.5, 'nr': 10., 'alphar': 1.3},
-                      'W + 0 jets': {'mu': 81., 'sigma': 6., 'nl': 10., 'alphal': 5.5, 'nr': 12., 'alphar': 0.5},
+                      'W + 0 jets': {'mu': 81., 'sigma': 6., 'nl': 10., 'alphal': 3.5, 'nr': 12., 'alphar': 5.5},
                       'W + 1 jet': {'mu': 82., 'sigma': 13., 'nl': 10., 'alphal': 5.5, 'nr': 20., 'alphar': 1.},
                       'W + multi jets': {'mu': 81., 'sigma': 17., 'nl': 10., 'alphal': 5.5, 'nr': 20., 'alphar': 0.9},
 
@@ -352,6 +362,13 @@ def MainFit():
     plot_fit_result(models, data['data'], obs, sample='data')
 
 
-MainFit()
+# MainFit()
 
-
+cats = {'_0j': 'jet_n == 0'}
+data = get_data_from_files(switch=0)
+models = {}
+for cat_name, cat_cut in cats.items():
+    for sample in ["single top"]:
+        data[sample + cat_name] = data[sample].query(cat_cut)
+        model, mus = initial_fitter(data, sample + cat_name, initial_parameters[sample], obs)
+        plot_fit_result({sample + cat_name: model}, data[sample + cat_name], obs, sample=sample + cat_name, mus=mus)
